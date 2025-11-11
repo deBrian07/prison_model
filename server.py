@@ -4,9 +4,9 @@ from typing import Any, Dict
 
 import solara
 from mesa.visualization.solara_viz import SolaraViz
-from mesa.visualization.space_renderer import SpaceRenderer
 from mesa.visualization.components.altair_components import (
     make_altair_plot_component,
+    make_altair_space,
 )
 from mesa.visualization.user_param import Slider
 
@@ -31,10 +31,26 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         color = "#d62728"  # red
     elif agent.gang_id == 2:
         color = "#1f77b4"  # blue
+    # Include rich tooltip data; X/Y duplicated in capitalized form to appear in tooltips
+    x, y = agent.pos if agent.pos is not None else (None, None)
+    # Optionally include gang reputation for affiliated agents
+    gang_rep = 0.0
+    if agent.gang_id is not None:
+        g = agent.model.gangs.get(agent.gang_id)
+        gang_rep = getattr(g, "reputation", 0.0) if g is not None else 0.0
+
     return {
         "id": agent.unique_id,
         "color": color,
         "gang": agent.gang_id if agent.gang_id is not None else 0,
+        "X": x,
+        "Y": y,
+        "strength": round(agent.strength, 3),
+        "internal_violence": round(agent.internal_violence, 3),
+        "external_violence": round(agent.external_violence, 3),  # fear proxy
+        "violence_count": agent.violence_count,
+        "gang_reputation": round(gang_rep, 3),
+        "alive": agent.alive,
     }
 
 
@@ -135,14 +151,12 @@ model_params = {
 @solara.component
 def Page():
     model = default_model()
-
-    # Create a renderer (Altair backend) and set up space + agents once.
-    renderer = SpaceRenderer(model=model, backend="altair")
-    renderer.draw_structure()
-    renderer.draw_agents(agent_portrayal)
+    # Space visualization with rich tooltips
+    space_component = make_altair_space(agent_portrayal)
 
     # Charts: affiliation shares and events per tick
     components = [
+        (space_component, 0),
         make_altair_plot_component(
             {"pct_gang1": "#d62728", "pct_gang2": "#1f77b4", "pct_unaffiliated": "#888888"},
             page=1,
@@ -155,7 +169,6 @@ def Page():
 
     return SolaraViz(
         model,
-        renderer=renderer,
         components=components,
         model_params=model_params,
         name="Prison Gangs — Level 0",
