@@ -190,41 +190,37 @@ class PrisonModel(Model):
                 b = agents[j]
                 if not (a.alive and b.alive):
                     continue
-                # Skip if either already removed due to earlier interaction in this cell
                 self._pair_interaction(a, b)
 
     def _pair_interaction(self, a: Prisoner, b: Prisoner) -> None:
-        # Violence: eligible unless same gang
-        same_gang = (a.gang_id is not None) and (a.gang_id == b.gang_id)
-        if not same_gang:
-            if self.random.random() < self.params.fight_start_prob:
-                self._handle_fight(a, b)
+        # Same-gang: no violence, no conversion.
+        if (a.gang_id is not None) and (a.gang_id == b.gang_id):
+            return
 
-        # Conversion: only unaffiliated vs affiliated
-        # Ordering of violence vs conversion is ambiguous; we attempt both.
+        # Unaffiliated vs affiliated: try conversion first as per outline.
         if (a.gang_id is None) ^ (b.gang_id is None):
             unaff = a if a.gang_id is None else b
             aff = b if a is unaff else a
-            if unaff.alive and aff.alive:
+            if unaff.alive and aff.alive and aff.gang_id is not None:
                 if self._should_convert(unaff, aff.gang_id):
                     self._assign_to_gang(unaff, aff.gang_id)
                     self.total_joins_this_tick += 1
+                    return
+
+        # If no conversion occurred, consider violence (not same gang).
+        if self.random.random() < self.params.fight_start_prob:
+            self._handle_fight(a, b)
 
     def _handle_fight(self, a: Prisoner, b: Prisoner) -> None:
         self.total_fights_this_tick += 1
 
-        # Winner: higher internal_violence per outline; tie unresolved -> ask user
-        if a.internal_violence > b.internal_violence:
+        # Winner: stronger agent wins; ties random.
+        if a.strength > b.strength:
             winner, loser = a, b
-        elif b.internal_violence > a.internal_violence:
+        elif b.strength > a.strength:
             winner, loser = b, a
         else:
-            # Ambiguity: tie-breaking rule not specified.
-            # Default to random until user specifies.
-            if self.random.random() < 0.5:
-                winner, loser = a, b
-            else:
-                winner, loser = b, a
+            winner, loser = (a, b) if self.random.random() < 0.5 else (b, a)
 
         winner.winning_fight_count += 1
 
@@ -233,9 +229,17 @@ class PrisonModel(Model):
         a.violence_count += 1
         b.violence_count += 1
 
-        # Death handling: ambiguous in Level 0; assume loser dies with prob p
+        # Death handling: loser may die with probability p
         if self.random.random() < self.params.death_probability:
             self._kill_agent(loser)
+
+        # Update gang reputation for the winner's gang (if any):
+        # base point = 1; upset bonus = +1 if winner was weaker on strength
+        if winner.gang_id is not None:
+            upset_bonus = 1.0 if winner.strength < loser.strength else 0.0
+            g = self.gangs.get(winner.gang_id)
+            if g is not None:
+                g.reputation += 1.0 + upset_bonus
 
         # Joining by violence count threshold: ambiguous whether it requires collision
         for agent in (a, b):
@@ -290,10 +294,28 @@ class PrisonModel(Model):
         """
         # Trigger (2): handled in _handle_fight after fights update counts.
 
-        # Trigger (1): mapping unspecified. To avoid making assumptions,
-        # we return False here until you specify the exact probability rule
-        # using `external_violence_threshold_join` and `external_violence_std`.
-        return False
+        # Trigger (1): probability depends on unaff fear (external_violence)
+        # relative to threshold, and the target gang's reputation share.
+        # Map to probability via a smooth logistic transform.
+        if self.params.external_violence_std <= 0:
+            return False
+
+        # z-score of fear vs threshold
+        z = (unaff.external_violence - self.params.external_violence_threshold_join) / (
+            self.params.external_violence_std
+        )
+
+        # Reputation share of target gang among all gangs (including small epsilon)
+        total_rep = sum(g.reputation for g in self.gangs.values()) + 1e-9
+        target_rep = self.gangs.get(target_gang_id).reputation if target_gang_id in self.gangs else 0.0
+        rep_share = target_rep / total_rep if total_rep > 0 else 0.0
+
+        # Combine into probability
+        # alpha and beta weight fear and reputation; tuned to 1.0 for Level 0 simplicity.
+        x = 1.0 * z + 1.0 * (rep_share - 0.5)
+        # logistic function
+        p = 1.0 / (1.0 + np.exp(-x))
+        return self.random.random() < p
 
     # ---------------------- Metrics helpers ----------------------
     def _alive_prisoners(self) -> List[Prisoner]:

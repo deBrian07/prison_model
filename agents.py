@@ -11,6 +11,7 @@ class Gang:
     gang_id: int
     name: str
     members: set = field(default_factory=set)
+    reputation: float = 0.0
 
     def size(self) -> int:
         return len(self.members)
