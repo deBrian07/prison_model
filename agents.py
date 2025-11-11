@@ -19,7 +19,6 @@ class Gang:
 class Prisoner(Agent):
     def __init__(
         self,
-        unique_id: int,
         model,
         *,
         internal_violence: float,
@@ -27,7 +26,7 @@ class Prisoner(Agent):
         strength: float,
         gang_id: Optional[int] = None,
     ):
-        super().__init__(unique_id, model)
+        super().__init__(model)
         self.internal_violence = internal_violence
         self.external_violence = external_violence
         self.strength = strength
@@ -66,10 +65,11 @@ class Prisoner(Agent):
         self._interacted_this_tick = False
         if not self.can_interact():
             return
-        cell_agents: List[Prisoner] = [
-            a for a in self.model.grid.get_cell_list_contents([self.pos]) if isinstance(a, Prisoner)
-        ]
+        cell_agents: List[Prisoner] = self.model.get_cell_prisoners(self.pos)
         if len(cell_agents) < 2:
+            return
+        # Ensure only one agent per cell triggers interactions to avoid duplicates
+        if self.unique_id != min(a.unique_id for a in cell_agents):
             return
         if self._interacted_this_tick:
             return

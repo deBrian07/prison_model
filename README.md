@@ -1,13 +1,14 @@
-Prison Gang Model (Level 0) — Mesa
+Prison Gang Model (Level 0) — Mesa 3.x
 
 Contents
-- Package: `mesa_impl`
+- Package: `prison_model`
   - `params.py`: Level 0 parameters dataclass
   - `agents.py`: `Prisoner` agent and `Gang` structure
   - `model.py`: `PrisonModel` implementing Level 0 dynamics
+  - Top-level `server.py`: Solara-based dashboard for Mesa 3.x
 
 What’s implemented (Level 0)
-- 2D bounded grid (no wrap), synchronous daily ticks via `StagedActivation`.
+- 2D bounded grid (no wrap), staged daily ticks via Model.agents (AgentSet) using `shuffle_do` for: plan_move → apply_move → interact → advance_day.
 - Prisoners move randomly 1 step/day; neighborhood and stay-behavior are configurable.
 - Two gangs only; membership tracked; dead agents removed from grid and gangs.
 - On cell collisions, for each pair:
@@ -18,7 +19,7 @@ What’s implemented (Level 0)
   - Conversion allowed for unaffiliated vs affiliated pairs via:
     - external-violence threshold comparison (placeholder mapping; see questions), and
     - violence-count threshold when opposing an affiliated agent.
-- Data collected per tick: % in gang 1, % in gang 2, % unaffiliated, number of fights, joins.
+- Data collected per tick: % in gang 1, % in gang 2, % unaffiliated, fights per tick, joins per tick.
 
 Open questions (please specify — no assumptions made beyond what's written)
 1) Join probability from external violence:
@@ -39,7 +40,24 @@ Open questions (please specify — no assumptions made beyond what's written)
 8) “Timer -> disappear” line in Level 0 interactions:
    - Do Level 0 agents have a sentence timer? If yes, what distribution/parameters?
 
-How to run (example outline)
+How to run (programmatic)
 - Instantiate `Level0Params` with your chosen values, then `PrisonModel(params)`.
-- Call `model.step()` in a loop, and retrieve metrics via `model.datacollector.get_model_vars_dataframe()`.
+- Call `model.step()` in a loop; staged actions are handled internally via `self.agents.shuffle_do("...")`.
+- Retrieve metrics via `model.datacollector.get_model_vars_dataframe()`.
 
+How to run the dashboard (Mesa 3.x + Solara)
+- Install dependencies (Mesa with viz extras): `pip install -r requirements.txt`.
+- Launch the UI (serves on http://localhost:8765): `solara run server.py`.
+- Controls:
+  - Sliders/checkboxes configure Level 0 parameters (grid is fixed at 30x30; change in `server.py`).
+  - Grid shows prisoners: red = Gang 1, blue = Gang 2, gray = unaffiliated.
+  - Charts display group shares and fights/joins per tick.
+
+Mesa 3.x migration notes (what changed here)
+- No `mesa.time` schedulers: replaced with explicit staged calls on `model.agents` (AgentSet).
+- Agent IDs are auto-managed by Mesa; `Prisoner` no longer takes `unique_id`.
+- Removing agents uses `agent.remove()` after `grid.remove_agent(agent)`.
+- MultiGrid cell access uses a helper to aggregate contents in 3.x (`model.get_cell_prisoners`).
+
+Note
+- External-violence-based conversion is wired but disabled pending your exact probability rule; the corresponding slider has no effect yet.

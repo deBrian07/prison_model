@@ -4,12 +4,16 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 from mesa import Model
-from mesa.time import StagedActivation
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 
-from .agents import Prisoner, Gang
-from .params import Level0Params
+# Support running as a package or as standalone modules in the same directory
+try:  # package-style imports
+    from .agents import Prisoner, Gang
+    from .params import Level0Params
+except Exception:  # fallback to local-module imports when run from this folder
+    from agents import Prisoner, Gang
+    from params import Level0Params
 
 
 class PrisonModel(Model):
@@ -43,12 +47,8 @@ class PrisonModel(Model):
         # Space (non-torus bounded grid as per "Boundaries of the prison")
         self.grid = MultiGrid(p.grid_width, p.grid_height, torus=False)
 
-        # Scheduler with explicit stages to ensure synchronous actions per day
-        self.scheduler = StagedActivation(
-            self,
-            stage_list=["plan_move", "apply_move", "interact", "advance_day"],
-            shuffle=True,
-        )
+        # In Mesa 3.x there is no built-in StagedActivation; we will call
+        # staged methods on the AgentSet explicitly in step().
 
         # Gangs: exactly two in Level 0
         self.gangs = {
@@ -60,7 +60,6 @@ class PrisonModel(Model):
         self.total_fights_this_tick = 0
         self.total_joins_this_tick = 0
 
-        self._agent_id_ctr = 0
         self._init_agents()
 
         # Data collector for Level 0 outputs
@@ -69,7 +68,7 @@ class PrisonModel(Model):
                 "pct_gang1": lambda m: m._pct_in_gang(1),
                 "pct_gang2": lambda m: m._pct_in_gang(2),
                 "pct_unaffiliated": lambda m: m._pct_unaffiliated(),
-                "avg_violence_per_tick": lambda m: m.total_fights_this_tick,
+                "fights_per_tick": lambda m: m.total_fights_this_tick,
                 "joins_per_tick": lambda m: m.total_joins_this_tick,
             }
         )
@@ -116,7 +115,6 @@ class PrisonModel(Model):
         g2_idxs = affil_idxs - g1_idxs
 
         for i in range(n):
-            self._agent_id_ctr += 1
             gid: Optional[int]
             if i in g1_idxs:
                 gid = 1
@@ -125,14 +123,12 @@ class PrisonModel(Model):
             else:
                 gid = None
             agent = Prisoner(
-                unique_id=self._agent_id_ctr,
                 model=self,
                 internal_violence=float(internal[i]),
                 external_violence=float(external[i]),
                 strength=float(strength[i]),
                 gang_id=gid,
             )
-            self.scheduler.add(agent)
             # Place uniformly at random
             x = self.random.randrange(self.grid.width)
             y = self.random.randrange(self.grid.height)
@@ -147,8 +143,18 @@ class PrisonModel(Model):
         self.total_fights_this_tick = 0
         self.total_joins_this_tick = 0
 
+        # Execute stages explicitly using the model's AgentSet
+        self.agents.shuffle_do("plan_move")
+        self.agents.shuffle_do("apply_move")
+        self.agents.shuffle_do("interact")
+        self.agents.shuffle_do("advance_day")
         self.datacollector.collect(self)
-        self.scheduler.step()
+
+        # Stop condition: run until all prisoners are dead
+        if len(self._alive_prisoners()) == 0:
+            self.running = False
+        else:
+            self.running = True
 
     # ---------------------- Movement ----------------------
     def get_move_targets(self, pos: Tuple[int, int]) -> List[Tuple[int, int]]:
@@ -174,7 +180,7 @@ class PrisonModel(Model):
 
     # ---------------------- Interactions ----------------------
     def resolve_cell_interactions(self, pos: Tuple[int, int]) -> None:
-        agents = [a for a in self.grid.get_cell_list_contents([pos]) if isinstance(a, Prisoner)]
+        agents = self.get_cell_prisoners(pos)
         if len(agents) < 2:
             return
         # Consider each unordered pair once
@@ -246,15 +252,13 @@ class PrisonModel(Model):
             return
         agent.alive = False
         self.total_deaths_this_tick += 1
-        # Remove from grid and scheduler
+        # Remove from grid and model registry
         try:
             self.grid.remove_agent(agent)
         except Exception:
             pass
-        try:
-            self.scheduler.remove(agent)
-        except Exception:
-            pass
+        # Deregister agent from the model
+        agent.remove()
         # Remove from gang membership if needed
         if agent.gang_id is not None:
             gang = self.gangs.get(agent.gang_id)
@@ -293,7 +297,7 @@ class PrisonModel(Model):
 
     # ---------------------- Metrics helpers ----------------------
     def _alive_prisoners(self) -> List[Prisoner]:
-        return [a for a in self.scheduler.agents if isinstance(a, Prisoner) and a.alive]
+        return [a for a in self.agents if isinstance(a, Prisoner) and a.alive]
 
     def _pct_in_gang(self, gang_id: int) -> float:
         alive = self._alive_prisoners()
@@ -308,3 +312,14 @@ class PrisonModel(Model):
             return 0.0
         unaff = sum(1 for a in alive if a.gang_id is None)
         return unaff / len(alive)
+
+    def get_cell_prisoners(self, pos: Tuple[int, int]) -> List[Prisoner]:
+        contents = list(self.grid.iter_cell_list_contents([pos]))
+        if not contents:
+            return []
+        # MultiGrid returns a list for cell contents; flatten if needed
+        if len(contents) == 1 and isinstance(contents[0], list):
+            items = contents[0]
+        else:
+            items = contents
+        return [a for a in items if isinstance(a, Prisoner)]
