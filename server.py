@@ -4,9 +4,9 @@ from typing import Any, Dict
 
 import solara
 from mesa.visualization.solara_viz import SolaraViz
-from mesa.visualization.components.altair_components import (
-    make_altair_plot_component,
-    make_altair_space,
+from mesa.visualization.components.altair_components import make_altair_space
+from mesa.visualization.components.matplotlib_components import (
+    make_mpl_plot_component,
 )
 from mesa.visualization.user_param import Slider
 
@@ -117,7 +117,7 @@ def default_model() -> AppPrisonModel:
         strength_std=1.0,
         violence_count_threshold_join=3,
         external_violence_threshold_join=7.0,
-        initial_affiliated_fraction=0.2,
+        initial_affiliated_fraction=0.0,
         seed=None,
     )
 
@@ -142,7 +142,7 @@ model_params = {
         "External-violence threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
     ),
     "initial_affiliated_fraction": Slider(
-        "Initial affiliated fraction", value=0.2, min=0.0, max=1.0, step=0.05
+        "Initial affiliated fraction", value=0.0, min=0.0, max=1.0, step=0.05
     ),
     # Fixed parameters (grid size) are implied via AppPrisonModel and not user-exposed
 }
@@ -151,19 +151,29 @@ model_params = {
 @solara.component
 def Page():
     model = default_model()
-    # Space visualization with rich tooltips
-    space_component = make_altair_space(agent_portrayal)
+    # Space visualization with rich tooltips; enlarge the grid display
+    def _enlarge_space(chart):
+        return chart.properties(width=500, height=500)
 
-    # Charts: affiliation shares and events per tick
+    space_component = make_altair_space(
+        agent_portrayal,
+        post_process=_enlarge_space,
+    )
+
+    # Charts: affiliation shares, events per tick, and alive_count on the same page
     components = [
         (space_component, 0),
-        make_altair_plot_component(
+        make_mpl_plot_component(
             {"pct_gang1": "#d62728", "pct_gang2": "#1f77b4", "pct_unaffiliated": "#888888"},
-            page=1,
+            page=0,
         ),
-        make_altair_plot_component(
+        make_mpl_plot_component(
             {"fights_per_tick": "#000000", "joins_per_tick": "#2ca02c"},
-            page=2,
+            page=0,
+        ),
+        make_mpl_plot_component(
+            "alive_count",
+            page=0,
         ),
     ]
 

@@ -70,8 +70,11 @@ class PrisonModel(Model):
                 "pct_unaffiliated": lambda m: m._pct_unaffiliated(),
                 "fights_per_tick": lambda m: m.total_fights_this_tick,
                 "joins_per_tick": lambda m: m.total_joins_this_tick,
+                "alive_count": lambda m: len(m._alive_prisoners()),
             }
         )
+        # Collect an initial baseline row so charts have consistent lengths
+        self.datacollector.collect(self)
 
     # ---------------------- Initialization ----------------------
     def _init_agents(self) -> None:
