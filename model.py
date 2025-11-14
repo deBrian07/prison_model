@@ -7,34 +7,32 @@ from mesa import Model
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 
-# Support running as a package or as standalone modules in the same directory
+# Allow imports to work both as a package and as local modules
 try:  # package-style imports
     from .agents import Prisoner, Gang
     from .params import Level0Params
-except Exception:  # fallback to local-module imports when run from this folder
+except Exception:  # running from this folder
     from agents import Prisoner, Gang
     from params import Level0Params
 
 
 class PrisonModel(Model):
-    """
-    Level 0 Mesa model following the provided outline strictly.
+    """Level 0 prison gang model.
 
-    Notes on open questions (need user decisions before finalizing behavior):
-    - Join probability from external violence: exact mapping from
-      `external_violence` vs (threshold, std) to probability is unspecified.
-    - Does violence_count increase for both participants in a fight, or only
-      the winner? (Level 1 specifies both; Level 0 text is ambiguous.)
-    - If internal_violence ties in a fight, who is the winner?
-    - On death during a fight, does the loser die with probability p, or
-      is the death assignment symmetric/random?
-    - Initial affiliation: what fraction of prisoners start unaffiliated vs.
-      pre-affiliated, and how are they assigned to the two gangs?
-    - Movement neighborhood: Von Neumann (4-neighbor) vs Moore (8-neighbor),
-      and can agents choose to stay in place?
-    - When both conversion and violence are eligible in a collision
-      (unaffiliated vs affiliated), which is attempted first, or are both
-      attempted (and in what order)?
+    What it does (short):
+    - Places prisoners on a 2D bounded grid.
+    - Each tick: move → interact (convert and/or fight) → advance day.
+    - Tracks gang membership, fights, joins, deaths, and simple gang reputation.
+
+    Assumptions made here (to keep Level 0 simple):
+    - Fight winner: higher strength; ties broken randomly.
+    - Violence counts: both fighters increment by 1 per fight.
+    - Deaths: loser dies with probability `death_probability`.
+    - Conversion order: attempt conversion first for unaffiliated vs affiliated; otherwise consider fights.
+
+    Open items to confirm later:
+    - Exact formula for external-violence-based join probability.
+    - Initial gang split and any other tie-breaking preferences.
     """
 
     def __init__(self, p: Level0Params):
@@ -44,13 +42,13 @@ class PrisonModel(Model):
             self.random.seed(p.seed)
             np.random.seed(p.seed)
 
-        # Space (non-torus bounded grid as per "Boundaries of the prison")
+        # Non-wrapping grid (prison has walls)
         self.grid = MultiGrid(p.grid_width, p.grid_height, torus=False)
 
-        # In Mesa 3.x there is no built-in StagedActivation; we will call
-        # staged methods on the AgentSet explicitly in step().
+        # Mesa 3.x has no built-in staged scheduler; we call staged methods
+        # on the AgentSet explicitly in step().
 
-        # Gangs: exactly two in Level 0
+        # Exactly two gangs in Level 0
         self.gangs = {
             1: Gang(gang_id=1, name="Gang 1"),
             2: Gang(gang_id=2, name="Gang 2"),
@@ -62,7 +60,7 @@ class PrisonModel(Model):
 
         self._init_agents()
 
-        # Data collector for Level 0 outputs
+        # Collect key model-level metrics each tick
         self.datacollector = DataCollector(
             model_reporters={
                 "pct_gang1": lambda m: m._pct_in_gang(1),
@@ -73,11 +71,12 @@ class PrisonModel(Model):
                 "alive_count": lambda m: len(m._alive_prisoners()),
             }
         )
-        # Collect an initial baseline row so charts have consistent lengths
+        # Collect an initial baseline row so charts start aligned
         self.datacollector.collect(self)
 
     # ---------------------- Initialization ----------------------
     def _init_agents(self) -> None:
+        """Create prisoners, set initial affiliations, and place them on the grid."""
         p = self.params
 
         # Sanity checks for required parameters
@@ -99,9 +98,7 @@ class PrisonModel(Model):
 
         n = p.n_prisoners
         n_affil = int(round(n * p.initial_affiliated_fraction))
-        # Ambiguity: how many start unaffiliated vs which gang? Ask user.
-        # For now, we enforce that caller decides the fraction via params,
-        # and we split the affiliated evenly across two gangs.
+        # Split the initially affiliated evenly across the two gangs
         n_affil_g1 = n_affil // 2
         n_affil_g2 = n_affil - n_affil_g1
 
@@ -141,6 +138,7 @@ class PrisonModel(Model):
 
     # ---------------------- Step ----------------------
     def step(self) -> None:
+        """Run one simulation day: move, interact, clean up, collect data."""
         # Reset tick counters
         self.total_deaths_this_tick = 0
         self.total_fights_this_tick = 0
@@ -153,7 +151,7 @@ class PrisonModel(Model):
         self.agents.shuffle_do("advance_day")
         self.datacollector.collect(self)
 
-        # Stop condition: run until all prisoners are dead
+        # Stop when everyone is dead
         if len(self._alive_prisoners()) == 0:
             self.running = False
         else:
@@ -161,6 +159,7 @@ class PrisonModel(Model):
 
     # ---------------------- Movement ----------------------
     def get_move_targets(self, pos: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """Return legal neighboring cells; include staying put if allowed."""
         x, y = pos
         neighbors = []
         # Neighborhood
@@ -183,6 +182,7 @@ class PrisonModel(Model):
 
     # ---------------------- Interactions ----------------------
     def resolve_cell_interactions(self, pos: Tuple[int, int]) -> None:
+        """Process each unordered pair in a cell exactly once."""
         agents = self.get_cell_prisoners(pos)
         if len(agents) < 2:
             return
@@ -196,11 +196,12 @@ class PrisonModel(Model):
                 self._pair_interaction(a, b)
 
     def _pair_interaction(self, a: Prisoner, b: Prisoner) -> None:
-        # Same-gang: no violence, no conversion.
+        """Decide whether two agents convert or fight, then apply effects."""
+        # Same gang: no conversion and no violence
         if (a.gang_id is not None) and (a.gang_id == b.gang_id):
             return
 
-        # Unaffiliated vs affiliated: try conversion first as per outline.
+        # Unaffiliated vs affiliated: attempt conversion first
         if (a.gang_id is None) ^ (b.gang_id is None):
             unaff = a if a.gang_id is None else b
             aff = b if a is unaff else a
@@ -210,14 +211,15 @@ class PrisonModel(Model):
                     self.total_joins_this_tick += 1
                     return
 
-        # If no conversion occurred, consider violence (not same gang).
+        # If no conversion occurred, consider violence
         if self.random.random() < self.params.fight_start_prob:
             self._handle_fight(a, b)
 
     def _handle_fight(self, a: Prisoner, b: Prisoner) -> None:
+        """Resolve a fight: choose winner, update counts, handle possible death."""
         self.total_fights_this_tick += 1
 
-        # Winner: stronger agent wins; ties random.
+        # Winner: stronger agent wins; ties random
         if a.strength > b.strength:
             winner, loser = a, b
         elif b.strength > a.strength:
@@ -227,12 +229,11 @@ class PrisonModel(Model):
 
         winner.winning_fight_count += 1
 
-        # Ambiguity: violence_count updates in Level 0
-        # Assuming both participants' violence_count increment by 1 per fight.
+        # Both participants' violence_count increment by 1 per fight
         a.violence_count += 1
         b.violence_count += 1
 
-        # Death handling: loser may die with probability p
+        # Loser may die with probability p
         if self.random.random() < self.params.death_probability:
             self._kill_agent(loser)
 
@@ -244,17 +245,17 @@ class PrisonModel(Model):
             if g is not None:
                 g.reputation += 1.0 + upset_bonus
 
-        # Joining by violence count threshold: ambiguous whether it requires collision
+        # Join by violence-count threshold (only if opponent is affiliated)
         for agent in (a, b):
             if agent.gang_id is None and agent.violence_count >= self.params.violence_count_threshold_join:
-                # If both are unaffiliated, there's no target gang; requires an affiliated opponent
-                # to define which gang to join. Otherwise, join the opponent's gang.
+                # If both are unaffiliated, there is no target gang; otherwise join opponent's gang.
                 other = b if agent is a else a
                 if other.gang_id is not None:
                     self._assign_to_gang(agent, other.gang_id)
                     self.total_joins_this_tick += 1
 
     def _kill_agent(self, agent: Prisoner) -> None:
+        """Remove agent from the simulation and from gang membership."""
         if not agent.alive:
             return
         agent.alive = False
@@ -274,7 +275,8 @@ class PrisonModel(Model):
         agent.gang_id = None
 
     def _assign_to_gang(self, agent: Prisoner, gang_id: int) -> None:
-        # Remove from previous gang
+        """Move agent to the given gang, updating membership sets."""
+        # Remove from previous gang if present
         if agent.gang_id is not None:
             prev = self.gangs.get(agent.gang_id)
             if prev and agent.unique_id in prev.members:
@@ -284,16 +286,11 @@ class PrisonModel(Model):
 
     # ---------------------- Conversion logic ----------------------
     def _should_convert(self, unaff: Prisoner, target_gang_id: int) -> bool:
-        """
-        Decide if an unaffiliated prisoner converts to the target gang during
-        an unaffiliated vs affiliated collision.
+        """Return True if an unaffiliated agent joins the target gang now.
 
-        The outline specifies two triggers for Level 0 joining:
-        1) External violence threshold + std -> probability of joining
-        2) Violence count threshold -> join
-
-        The exact mapping for (1) is unspecified; we need user input. For now,
-        this method raises if needed parameters are absent.
+        Triggers in Level 0:
+        1) External violence vs threshold (mapped to a probability here).
+        2) Violence-count threshold (handled after fights, not here).
         """
         # Trigger (2): handled in _handle_fight after fights update counts.
 
@@ -308,13 +305,12 @@ class PrisonModel(Model):
             self.params.external_violence_std
         )
 
-        # Reputation share of target gang among all gangs (including small epsilon)
+        # Reputation share of target gang among all gangs (with small epsilon)
         total_rep = sum(g.reputation for g in self.gangs.values()) + 1e-9
         target_rep = self.gangs.get(target_gang_id).reputation if target_gang_id in self.gangs else 0.0
         rep_share = target_rep / total_rep if total_rep > 0 else 0.0
 
-        # Combine into probability
-        # alpha and beta weight fear and reputation; tuned to 1.0 for Level 0 simplicity.
+        # Combine into probability via a simple logistic transform
         x = 1.0 * z + 1.0 * (rep_share - 0.5)
         # logistic function
         p = 1.0 / (1.0 + np.exp(-x))
@@ -322,9 +318,11 @@ class PrisonModel(Model):
 
     # ---------------------- Metrics helpers ----------------------
     def _alive_prisoners(self) -> List[Prisoner]:
+        """All living prisoners currently in the model."""
         return [a for a in self.agents if isinstance(a, Prisoner) and a.alive]
 
     def _pct_in_gang(self, gang_id: int) -> float:
+        """Share of alive prisoners affiliated with a specific gang."""
         alive = self._alive_prisoners()
         if not alive:
             return 0.0
@@ -332,6 +330,7 @@ class PrisonModel(Model):
         return in_g / len(alive)
 
     def _pct_unaffiliated(self) -> float:
+        """Share of alive prisoners not in any gang."""
         alive = self._alive_prisoners()
         if not alive:
             return 0.0
@@ -339,6 +338,7 @@ class PrisonModel(Model):
         return unaff / len(alive)
 
     def get_cell_prisoners(self, pos: Tuple[int, int]) -> List[Prisoner]:
+        """All Prisoner agents in the given grid cell."""
         contents = list(self.grid.iter_cell_list_contents([pos]))
         if not contents:
             return []

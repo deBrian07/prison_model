@@ -1,3 +1,5 @@
+"""Public API for the prison_model package (Level 0)."""
+
 from model import PrisonModel
 from agents import Prisoner, Gang
 from params import Level0Params

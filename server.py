@@ -10,6 +10,8 @@ from mesa.visualization.components.matplotlib_components import (
 )
 from mesa.visualization.user_param import Slider
 
+"""Solara (Mesa 3.x) dashboard to visualize the Level 0 model."""
+
 # Import local modules directly so this runs from this directory
 from model import PrisonModel
 from params import Level0Params
@@ -22,6 +24,7 @@ GRID_H = 30
 
 
 def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
+    """Encode how a Prisoner appears on the grid and in tooltips."""
     if not isinstance(agent, Prisoner):
         return {"id": 0}
     if not agent.alive:
@@ -31,7 +34,7 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         color = "#d62728"  # red
     elif agent.gang_id == 2:
         color = "#1f77b4"  # blue
-    # Include rich tooltip data; X/Y duplicated in capitalized form to appear in tooltips
+    # Include tooltip data; X/Y duplicated capitalized for Altair tooltips
     x, y = agent.pos if agent.pos is not None else (None, None)
     # Optionally include gang reputation for affiliated agents
     gang_rep = 0.0
@@ -57,8 +60,8 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
 class AppPrisonModel(PrisonModel):
     """Thin wrapper exposing keyword params for Solara controls.
 
-    This keeps the core model unchanged while enabling Solara's ModelCreator
-    to instantiate/reset using individual parameters.
+    Keeps the core model unchanged while allowing the dashboard to reset
+    and instantiate using individual sliders/checkboxes.
     """
 
     def __init__(
@@ -103,6 +106,7 @@ class AppPrisonModel(PrisonModel):
 
 
 def default_model() -> AppPrisonModel:
+    """A reasonable default configuration for the demo app."""
     return AppPrisonModel(
         n_prisoners=200,
         moore=True,
@@ -150,17 +154,18 @@ model_params = {
 
 @solara.component
 def Page():
+    """Solara page: grid + charts + controls for the Level 0 model."""
     model = default_model()
-    # Space visualization with rich tooltips; enlarge the grid display
+    # Space visualization with tooltips; enlarge the grid display
     def _enlarge_space(chart):
-        return chart.properties(width=500, height=500)
+        return chart.properties(width=250, height=250)
 
     space_component = make_altair_space(
         agent_portrayal,
         post_process=_enlarge_space,
     )
 
-    # Charts: affiliation shares, events per tick, and alive_count on the same page
+    # Charts: affiliation shares, fights/joins per tick, and alive count
     components = [
         (space_component, 0),
         make_mpl_plot_component(
