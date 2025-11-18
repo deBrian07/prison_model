@@ -39,6 +39,8 @@ jobs:
           MPLCONFIGDIR: ${{ runner.temp }}/.matplotlib
           # For GitHub Pages sites served at https://<user>.github.io/<repo>/
           SOLARA_BASE_URL: "/${{ github.event.repository.name }}/"
+          # Ensure Solara SSG writes into ./build (repo root)
+          SOLARA_SSG_BUILD_PATH: build
         run: |
           mkdir -p "$MPLCONFIGDIR"
           solara ssg server.py
