@@ -6,3 +6,4 @@ itsdangerous>=2.1.0
 authlib>=1.2.0
 httpx>=0.24.0
 playwright==1.56.0
+networkx
