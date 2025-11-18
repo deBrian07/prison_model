@@ -1,0 +1,5 @@
+Collecting itsdangerous
+  Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+Installing collected packages: itsdangerous
+Successfully installed itsdangerous-2.2.0

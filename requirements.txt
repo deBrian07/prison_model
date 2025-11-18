@@ -1,3 +1,8 @@
 mesa[viz]==3.3.1
 # Needed for Solara static site generation (GitHub Pages)
 solara-enterprise[ssg]==1.54.0
+# Required by solara_enterprise.auth middleware used by the server
+itsdangerous>=2.1.0
+authlib>=1.2.0
+httpx>=0.24.0
+playwright==1.56.0
