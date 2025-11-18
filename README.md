@@ -61,3 +61,8 @@ Mesa 3.x migration notes (what changed here)
 
 Note
 - External-violence-based conversion is wired but disabled pending your exact probability rule; the corresponding slider has no effect yet.
+
+GitHub Pages (static build via Solara SSG)
+- Workflow: `.github/workflows/gh-pages.yml` installs `solara-enterprise[ssg]`, runs `solara ssg server.py`, and publishes the `build/` output.
+- Base path: `SOLARA_BASE_URL` is set to `/${REPO_NAME}/` for default GitHub Pages URLs (`https://<user>.github.io/<repo>/`). Override if using a custom domain.
+- To publish: push to `main` or trigger the workflow manually, then enable GitHub Pages with source = GitHub Actions in the repo settings.
