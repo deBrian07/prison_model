@@ -20,6 +20,11 @@ from params import Level0Params
 from agents import Prisoner
 
 
+# Provide Altair utils fallback needed by Mesa with Altair 5.x
+if not hasattr(alt.utils, "infer_vegalite_type_for_pandas"):
+    alt.utils.infer_vegalite_type_for_pandas = alt.utils.infer_vegalite_type  # type: ignore[attr-defined]
+
+
 # Patch Solara's FigureAltair to handle newer Altair/VegaLite MIME types (v6).
 @solara.component
 def _FigureAltairCompat(
