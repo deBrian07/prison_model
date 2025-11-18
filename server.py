@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import altair as alt
 import solara
+from solara.components import figure_altair as _figure_altair
 from mesa.visualization.solara_viz import SolaraViz
 from mesa.visualization.components.altair_components import make_altair_space
 from mesa.visualization.components.matplotlib_components import (
@@ -16,6 +18,42 @@ from mesa.visualization.user_param import Slider
 from model import PrisonModel
 from params import Level0Params
 from agents import Prisoner
+
+
+# Patch Solara's FigureAltair to handle newer Altair/VegaLite MIME types (v6).
+@solara.component
+def _FigureAltairCompat(
+    chart,
+    on_click=None,
+    on_hover=None,
+):
+    with alt.renderers.enable("mimetype"):
+        bundle = chart._repr_mimebundle_()[0]
+        keys = [
+            "application/vnd.vegalite.v5+json",
+            "application/vnd.vegalite.v4+json",
+            "application/vnd.vegalite.v6+json",
+            "application/vnd.vegalite.v6.json",
+        ]
+        spec = None
+        for key in keys:
+            if key in bundle:
+                spec = bundle[key]
+                break
+        if spec is None:
+            raise KeyError(f"{keys} not in mimebundle:\\n\\n{bundle}")
+        return solara.widgets.VegaLite.element(
+            spec=spec,
+            on_click=on_click,
+            listen_to_click=on_click is not None,
+            on_hover=on_hover,
+            listen_to_hover=on_hover is not None,
+        )
+
+
+# Apply monkey patch so Mesa's SpaceAltair uses the compatible implementation.
+solara.FigureAltair = _FigureAltairCompat  # type: ignore[attr-defined]
+_figure_altair.FigureAltair = _FigureAltairCompat  # type: ignore[attr-defined]
 
 
 # Fixed grid dimensions for the dashboard. Change here to resize the view.
