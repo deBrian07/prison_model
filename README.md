@@ -66,3 +66,12 @@ GitHub Pages (static build via Solara SSG)
 - Workflow: `.github/workflows/gh-pages.yml` installs `solara-enterprise[ssg]`, runs `solara ssg server.py`, and publishes the `build/` output.
 - Base path: `SOLARA_BASE_URL` is set to `/${REPO_NAME}/` for default GitHub Pages URLs (`https://<user>.github.io/<repo>/`). Override if using a custom domain.
 - To publish: push to `main` or trigger the workflow manually, then enable GitHub Pages with source = GitHub Actions in the repo settings.
+
+Railway deployment (full backend)
+- A production-ready `Dockerfile` is included; it installs the Python dependencies and runs `solara run server.py --host 0.0.0.0 --port $PORT`.
+- Steps to deploy:
+  1. Push this repo to GitHub (or your preferred git host).
+  2. In Railway, create a New Project → “Deploy from GitHub repo”, select this repo, and leave the default `Dockerfile` build plan.
+  3. Railway injects `PORT`; no extra env vars are required, but you can change `MPLCONFIGDIR` or `SOLARA_BASE_URL` in the Railway dashboard if desired.
+  4. After the build succeeds, Railway will expose the public URL where the Solara dashboard runs with a persistent backend.
+- CLI alternative: install the Railway CLI, run `railway login`, `railway init`, then `railway up` to push the Docker build from your machine.

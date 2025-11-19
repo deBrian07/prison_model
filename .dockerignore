@@ -1,0 +1,12 @@
+venv
+__pycache__
+.git
+.gitignore
+build
+staticbuild
+*.pyc
+*.pyo
+*.pyd
+*.swp
+.mypy_cache
+.pytest_cache
