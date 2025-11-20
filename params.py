@@ -28,16 +28,12 @@ class Level0Params:
     death_probability: float  # Chance the loser dies in a fight (0..1)
 
     # Trait distributions (drawn per agent)
-    internal_violence_mean: float
-    internal_violence_std: float
-    external_violence_mean: float
-    external_violence_std: float
     strength_mean: float
     strength_std: float
 
     # Joining (conversion) rules
     violence_count_threshold_join: int
-    external_violence_threshold_join: float
+    strength_threshold_join: float
 
     # Gangs
     # Exactly two gangs exist in Level 0
@@ -67,10 +63,6 @@ class Level1Params:
     death_probability: float
 
     # Trait distributions
-    internal_violence_mean: float
-    internal_violence_std: float
-    external_violence_mean: float
-    external_violence_std: float
     strength_mean: float
     strength_std: float
     age_mean: float
@@ -80,7 +72,7 @@ class Level1Params:
 
     # Gang + joining controls
     violence_count_threshold_join: int
-    external_violence_threshold_join: float
+    strength_threshold_join: float
     initial_affiliated_fraction: float
     n_initial_gangs: int
     fear_threshold: float

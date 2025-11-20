@@ -31,9 +31,7 @@ class Prisoner(Agent):
     """An inmate in the prison yard.
 
     Attributes of interest:
-    - internal_violence: propensity to fight within the prison
-    - external_violence: fear/pressure from outside (used for conversion)
-    - strength: used to determine fight outcomes
+    - strength: used to determine fight outcomes (also proxies fear pressure)
     - gang_id: current gang affiliation (None means unaffiliated)
     - alive: whether the prisoner is still in the simulation
     """
@@ -42,14 +40,10 @@ class Prisoner(Agent):
         self,
         model,
         *,
-        internal_violence: float,
-        external_violence: float,
         strength: float,
         gang_id: Optional[int] = None,
     ):
         super().__init__(model)
-        self.internal_violence = internal_violence
-        self.external_violence = external_violence
         self.strength = strength
         self.gang_id = gang_id
 
@@ -119,8 +113,6 @@ class PrisonerLevel1(Prisoner):
         self,
         model,
         *,
-        internal_violence: float,
-        external_violence: float,
         strength: float,
         age: float,
         sentence_length: int,
@@ -128,8 +120,6 @@ class PrisonerLevel1(Prisoner):
     ):
         super().__init__(
             model,
-            internal_violence=internal_violence,
-            external_violence=external_violence,
             strength=strength,
             gang_id=gang_id,
         )

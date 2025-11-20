@@ -32,7 +32,7 @@ class PrisonModel(Model):
     - Conversion order: attempt conversion first for unaffiliated vs affiliated; otherwise consider fights.
 
     Open items to confirm later:
-    - Exact formula for external-violence-based join probability.
+    - Exact formula for strength-based join probability.
     - Initial gang split and any other tie-breaking preferences.
     """
 
@@ -82,16 +82,12 @@ class PrisonModel(Model):
 
         # Sanity checks for required parameters
         for name in [
-            "internal_violence_mean",
-            "internal_violence_std",
-            "external_violence_mean",
-            "external_violence_std",
             "strength_mean",
             "strength_std",
             "fight_start_prob",
             "death_probability",
             "violence_count_threshold_join",
-            "external_violence_threshold_join",
+            "strength_threshold_join",
             "initial_affiliated_fraction",
         ]:
             if getattr(p, name, None) is None:
@@ -104,8 +100,6 @@ class PrisonModel(Model):
         n_affil_g2 = n_affil - n_affil_g1
 
         # Draw attributes
-        internal = np.random.normal(p.internal_violence_mean, p.internal_violence_std, n)
-        external = np.random.normal(p.external_violence_mean, p.external_violence_std, n)
         strength = np.random.normal(p.strength_mean, p.strength_std, n)
 
         # Create agents
@@ -125,8 +119,6 @@ class PrisonModel(Model):
                 gid = None
             agent = Prisoner(
                 model=self,
-                internal_violence=float(internal[i]),
-                external_violence=float(external[i]),
                 strength=float(strength[i]),
                 gang_id=gid,
             )
@@ -306,15 +298,15 @@ class PrisonModel(Model):
         """
         # Trigger (2): handled in _handle_fight after fights update counts.
 
-        # Trigger (1): probability depends on unaff fear (external_violence)
-        # relative to threshold, and the target gang's reputation share.
+        # Trigger (1): probability depends on unaff strength relative to threshold,
+        # and the target gang's reputation share.
         # Map to probability via a smooth logistic transform.
-        if self.params.external_violence_std <= 0:
+        if self.params.strength_std <= 0:
             return False
 
         # z-score of fear vs threshold
-        z = (unaff.external_violence - self.params.external_violence_threshold_join) / (
-            self.params.external_violence_std
+        z = (unaff.strength - self.params.strength_threshold_join) / (
+            self.params.strength_std
         )
 
         # Reputation share of target gang among all gangs (with small epsilon)
@@ -421,10 +413,6 @@ class PrisonModelLevel1(Model):
     def _init_agents(self) -> None:
         p = self.params
         required = [
-            "internal_violence_mean",
-            "internal_violence_std",
-            "external_violence_mean",
-            "external_violence_std",
             "strength_mean",
             "strength_std",
             "age_mean",
@@ -434,7 +422,7 @@ class PrisonModelLevel1(Model):
             "fight_start_prob",
             "death_probability",
             "violence_count_threshold_join",
-            "external_violence_threshold_join",
+            "strength_threshold_join",
             "initial_affiliated_fraction",
             "fear_threshold",
             "strictness_violence_threshold",
@@ -461,8 +449,6 @@ class PrisonModelLevel1(Model):
             for idx in assigned:
                 gang_assignments[idx] = gid
 
-        internal = np.random.normal(p.internal_violence_mean, p.internal_violence_std, n)
-        external = np.random.normal(p.external_violence_mean, p.external_violence_std, n)
         strength = np.random.normal(p.strength_mean, p.strength_std, n)
         ages = np.random.normal(p.age_mean, p.age_std, n)
         sentences = np.random.normal(p.sentence_mean, p.sentence_std, n)
@@ -473,8 +459,6 @@ class PrisonModelLevel1(Model):
             gang_id = gang_assignments.get(i)
             agent = PrisonerLevel1(
                 model=self,
-                internal_violence=float(internal[i]),
-                external_violence=float(external[i]),
                 strength=float(strength[i]),
                 age=age,
                 sentence_length=sentence,
@@ -563,10 +547,10 @@ class PrisonModelLevel1(Model):
             self._handle_fight(a, b)
 
     def _should_convert(self, unaff: PrisonerLevel1, target_gang_id: int) -> bool:
-        if self.params.external_violence_std <= 0:
+        if self.params.strength_std <= 0:
             return False
-        z = (unaff.external_violence - self.params.external_violence_threshold_join) / max(
-            1e-9, self.params.external_violence_std
+        z = (unaff.strength - self.params.strength_threshold_join) / max(
+            1e-9, self.params.strength_std
         )
         total_danger = sum(g.danger for g in self.gangs.values()) + 1e-9
         target_danger = 0.0

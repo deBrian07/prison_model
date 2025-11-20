@@ -103,8 +103,6 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         "X": x,
         "Y": y,
         "strength": round(agent.strength, 3),
-        "internal_violence": round(agent.internal_violence, 3),
-        "external_violence": round(agent.external_violence, 3),  # fear proxy
         "violence_count": agent.violence_count,
         "gang_reputation": round(gang_rep, 3),
         "alive": agent.alive,
@@ -137,14 +135,10 @@ class AppPrisonModelLevel0(PrisonModel):
         allow_stay: bool,
         fight_start_prob: float,
         death_probability: float,
-        internal_violence_mean: float,
-        internal_violence_std: float,
-        external_violence_mean: float,
-        external_violence_std: float,
         strength_mean: float,
         strength_std: float,
         violence_count_threshold_join: int,
-        external_violence_threshold_join: float,
+        strength_threshold_join: float,
         initial_affiliated_fraction: float,
         seed: int | None = None,
     ) -> None:
@@ -156,14 +150,10 @@ class AppPrisonModelLevel0(PrisonModel):
             allow_stay=bool(allow_stay),
             fight_start_prob=float(fight_start_prob),
             death_probability=float(death_probability),
-            internal_violence_mean=float(internal_violence_mean),
-            internal_violence_std=float(internal_violence_std),
-            external_violence_mean=float(external_violence_mean),
-            external_violence_std=float(external_violence_std),
             strength_mean=float(strength_mean),
             strength_std=float(strength_std),
             violence_count_threshold_join=int(violence_count_threshold_join),
-            external_violence_threshold_join=float(external_violence_threshold_join),
+            strength_threshold_join=float(strength_threshold_join),
             initial_affiliated_fraction=float(initial_affiliated_fraction),
             seed=seed,
         )
@@ -183,10 +173,6 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
         allow_stay: bool,
         fight_start_prob: float,
         death_probability: float,
-        internal_violence_mean: float,
-        internal_violence_std: float,
-        external_violence_mean: float,
-        external_violence_std: float,
         strength_mean: float,
         strength_std: float,
         age_mean: float,
@@ -194,7 +180,7 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
         sentence_mean: float,
         sentence_std: float,
         violence_count_threshold_join: int,
-        external_violence_threshold_join: float,
+        strength_threshold_join: float,
         fear_threshold: float,
         strictness_violence_threshold: int,
         isolation_duration: int,
@@ -210,10 +196,6 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
             allow_stay=bool(allow_stay),
             fight_start_prob=float(fight_start_prob),
             death_probability=float(death_probability),
-            internal_violence_mean=float(internal_violence_mean),
-            internal_violence_std=float(internal_violence_std),
-            external_violence_mean=float(external_violence_mean),
-            external_violence_std=float(external_violence_std),
             strength_mean=float(strength_mean),
             strength_std=float(strength_std),
             age_mean=float(age_mean),
@@ -221,7 +203,7 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
             sentence_mean=float(sentence_mean),
             sentence_std=float(sentence_std),
             violence_count_threshold_join=int(violence_count_threshold_join),
-            external_violence_threshold_join=float(external_violence_threshold_join),
+            strength_threshold_join=float(strength_threshold_join),
             fear_threshold=float(fear_threshold),
             strictness_violence_threshold=int(strictness_violence_threshold),
             isolation_duration=int(isolation_duration),
@@ -238,14 +220,10 @@ def default_model_level0() -> AppPrisonModelLevel0:
         allow_stay=True,
         fight_start_prob=0.10,
         death_probability=0.05,
-        internal_violence_mean=5.0,
-        internal_violence_std=1.0,
-        external_violence_mean=5.0,
-        external_violence_std=1.0,
         strength_mean=5.0,
         strength_std=1.0,
         violence_count_threshold_join=3,
-        external_violence_threshold_join=7.0,
+        strength_threshold_join=7.0,
         initial_affiliated_fraction=0.0,
         seed=None,
     )
@@ -260,10 +238,6 @@ def default_model_level1() -> AppPrisonModelLevel1:
         allow_stay=True,
         fight_start_prob=0.1,
         death_probability=0.05,
-        internal_violence_mean=5.0,
-        internal_violence_std=1.0,
-        external_violence_mean=5.0,
-        external_violence_std=1.0,
         strength_mean=5.0,
         strength_std=1.0,
         age_mean=35.0,
@@ -271,7 +245,7 @@ def default_model_level1() -> AppPrisonModelLevel1:
         sentence_mean=365.0,
         sentence_std=60.0,
         violence_count_threshold_join=3,
-        external_violence_threshold_join=7.0,
+        strength_threshold_join=7.0,
         fear_threshold=0.1,
         strictness_violence_threshold=6,
         isolation_duration=5,
@@ -286,17 +260,13 @@ model_params_level0 = {
     "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
     "fight_start_prob": Slider("Fight start probability", value=0.10, min=0.0, max=1.0, step=0.01),
     "death_probability": Slider("Death probability (loser)", value=0.05, min=0.0, max=1.0, step=0.01),
-    "internal_violence_mean": Slider("Internal violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
-    "internal_violence_std": Slider("Internal violence std", value=1.0, min=0.0, max=5.0, step=0.1),
-    "external_violence_mean": Slider("External violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
-    "external_violence_std": Slider("External violence std", value=1.0, min=0.0, max=5.0, step=0.1),
     "strength_mean": Slider("Strength mean", value=5.0, min=0.0, max=10.0, step=0.1),
     "strength_std": Slider("Strength std", value=1.0, min=0.0, max=5.0, step=0.1),
     "violence_count_threshold_join": Slider(
         "Violence-count threshold to join", value=3, min=0, max=20, step=1
     ),
-    "external_violence_threshold_join": Slider(
-        "External-violence threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
+    "strength_threshold_join": Slider(
+        "Strength threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
     ),
     "initial_affiliated_fraction": Slider(
         "Initial affiliated fraction", value=0.0, min=0.0, max=1.0, step=0.05
@@ -314,10 +284,6 @@ model_params_level1 = {
     "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
     "fight_start_prob": Slider("Fight start probability", value=0.10, min=0.0, max=1.0, step=0.01),
     "death_probability": Slider("Death probability (loser)", value=0.05, min=0.0, max=1.0, step=0.01),
-    "internal_violence_mean": Slider("Internal violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
-    "internal_violence_std": Slider("Internal violence std", value=1.0, min=0.0, max=5.0, step=0.1),
-    "external_violence_mean": Slider("External violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
-    "external_violence_std": Slider("External violence std", value=1.0, min=0.0, max=5.0, step=0.1),
     "strength_mean": Slider("Strength mean", value=5.0, min=0.0, max=10.0, step=0.1),
     "strength_std": Slider("Strength std", value=1.0, min=0.0, max=5.0, step=0.1),
     "age_mean": Slider("Age mean", value=35.0, min=18.0, max=80.0, step=1.0),
@@ -327,8 +293,8 @@ model_params_level1 = {
     "violence_count_threshold_join": Slider(
         "Violence-count threshold to join", value=3, min=0, max=20, step=1
     ),
-    "external_violence_threshold_join": Slider(
-        "External-violence threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
+    "strength_threshold_join": Slider(
+        "Strength threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
     ),
     "fear_threshold": Slider("Fear threshold to join", value=0.1, min=0.0, max=1.0, step=0.01),
     "strictness_violence_threshold": Slider(
