@@ -10,10 +10,10 @@ from mesa.datacollection import DataCollector
 
 # Allow imports to work both as a package and as local modules
 try:  # package-style imports
-    from .agents import Prisoner, PrisonerLevel1, Gang
+    from .agents import Prisoner, PrisonerLevel1, Gang, IsolationCellMarker
     from .params import Level0Params, Level1Params
 except Exception:  # running from this folder
-    from agents import Prisoner, PrisonerLevel1, Gang
+    from agents import Prisoner, PrisonerLevel1, Gang, IsolationCellMarker
     from params import Level0Params, Level1Params
 
 
@@ -377,6 +377,7 @@ class PrisonModelLevel1(Model):
         ]
         if not self.yard_cells:
             raise ValueError("No yard cells available once the isolation ring is created.")
+        self._create_isolation_markers()
 
         self._init_gangs()
 
@@ -474,6 +475,38 @@ class PrisonModelLevel1(Model):
                 if x == 0 or y == 0 or x == self.grid.width - 1 or y == self.grid.height - 1:
                     cells.add((x, y))
         return cells
+
+    def _create_isolation_markers(self) -> None:
+        self.isolation_markers: dict[Tuple[int, int], IsolationCellMarker] = {}
+        self.active_isolation_markers: set[Tuple[int, int]] = set()
+        for cell in self.isolation_cells:
+            marker = IsolationCellMarker(self)
+            self.grid.place_agent(marker, cell)
+            self.isolation_markers[cell] = marker
+            self.active_isolation_markers.add(cell)
+
+    def _deactivate_isolation_marker(self, cell: Tuple[int, int]) -> None:
+        if cell not in self.active_isolation_markers:
+            return
+        marker = self.isolation_markers.get(cell)
+        if marker is None:
+            return
+        try:
+            self.grid.remove_agent(marker)
+        except Exception:
+            pass
+        self.active_isolation_markers.discard(cell)
+
+    def _activate_isolation_marker(self, cell: Tuple[int, int]) -> None:
+        marker = self.isolation_markers.get(cell)
+        if marker is None or cell in self.active_isolation_markers:
+            return
+        try:
+            self.grid.place_agent(marker, cell)
+        except Exception:
+            pass
+        else:
+            self.active_isolation_markers.add(cell)
 
     def _place_agent_in_yard(self, agent: PrisonerLevel1) -> None:
         cell = self.random.choice(self.yard_cells)
@@ -605,19 +638,31 @@ class PrisonModelLevel1(Model):
         if not self.isolation_cells:
             return
         cell = self.random.choice(list(self.isolation_cells))
+        prev_pos = agent.pos
+        self._deactivate_isolation_marker(cell)
         self.grid.move_agent(agent, cell)
-        agent.start_isolation(self.params.isolation_duration)
+        agent.pre_isolation_pos = prev_pos
+        agent.start_isolation(self.params.isolation_duration, cell)
 
     def _release_from_isolation(self, agent: PrisonerLevel1) -> None:
         if not agent.alive:
             return
-        cell = self.random.choice(self.yard_cells)
+        prev_cell = agent.last_isolation_cell
+        target = agent.pre_isolation_pos
+        if target is None or target in self.isolation_cells:
+            cell = self.random.choice(self.yard_cells)
+        else:
+            cell = target
         self.grid.move_agent(agent, cell)
         agent.end_isolation()
+        agent.pre_isolation_pos = None
+        if prev_cell is not None:
+            self._activate_isolation_marker(prev_cell)
 
     def _kill_agent(self, agent: PrisonerLevel1) -> None:
         if not agent.alive:
             return
+        prev_cell = agent.last_isolation_cell if agent.is_isolated else None
         agent.alive = False
         self.total_deaths_this_tick += 1
         try:
@@ -627,10 +672,14 @@ class PrisonModelLevel1(Model):
         agent.remove()
         self._remove_from_gang(agent)
         agent.gang_id = None
+        agent.pre_isolation_pos = None
+        if prev_cell is not None:
+            self._activate_isolation_marker(prev_cell)
 
     def _release_agent(self, agent: PrisonerLevel1) -> None:
         if not agent.alive:
             return
+        prev_cell = agent.last_isolation_cell if agent.is_isolated else None
         agent.mark_released()
         agent.alive = False
         self.total_releases_this_tick += 1
@@ -641,6 +690,9 @@ class PrisonModelLevel1(Model):
         agent.remove()
         self._remove_from_gang(agent)
         agent.gang_id = None
+        agent.pre_isolation_pos = None
+        if prev_cell is not None:
+            self._activate_isolation_marker(prev_cell)
 
     def _assign_to_gang(self, agent: PrisonerLevel1, gang_id: int) -> None:
         self._remove_from_gang(agent)

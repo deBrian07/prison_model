@@ -17,7 +17,7 @@ from mesa.visualization.user_param import Slider
 # Import local modules directly so this runs from this directory
 from model import PrisonModel, PrisonModelLevel1
 from params import Level0Params, Level1Params
-from agents import Prisoner
+from agents import Prisoner, IsolationCellMarker
 
 
 # Provide Altair utils fallback needed by Mesa with Altair 5.x
@@ -79,14 +79,22 @@ ISOLATION_COLOR = "#f4d03f"
 
 def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
     """Encode how a Prisoner appears on the grid and in tooltips."""
+    if isinstance(agent, IsolationCellMarker):
+        x, y = agent.pos if agent.pos is not None else (None, None)
+        return {
+            "id": f"isolation-{x}-{y}",
+            "color": ISOLATION_COLOR,
+            "X": x,
+            "Y": y,
+            "zone": "Isolation",
+            "gang": -1,
+        }
     if not isinstance(agent, Prisoner):
         return {"id": 0}
     if not agent.alive:
         return {"id": agent.unique_id}
     color = "#888888"
-    if getattr(agent, "is_isolated", False):
-        color = ISOLATION_COLOR
-    elif agent.gang_id is not None:
+    if agent.gang_id is not None:
         color = GANG_COLORS[(agent.gang_id - 1) % len(GANG_COLORS)]
     # Include tooltip data; X/Y duplicated capitalized for Altair tooltips
     x, y = agent.pos if agent.pos is not None else (None, None)

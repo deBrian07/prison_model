@@ -128,6 +128,8 @@ class PrisonerLevel1(Prisoner):
         self.is_isolated: bool = False
         self.isolation_timer: int = 0
         self.was_released: bool = False
+        self.last_isolation_cell: Optional[Tuple[int, int]] = None
+        self.pre_isolation_pos: Optional[Tuple[int, int]] = None
 
     @property
     def fear(self) -> float:
@@ -154,14 +156,16 @@ class PrisonerLevel1(Prisoner):
     def can_interact(self) -> bool:
         return self.in_yard()
 
-    def start_isolation(self, duration: int) -> None:
+    def start_isolation(self, duration: int, cell: Tuple[int, int]) -> None:
         """Enter isolation for a fixed number of ticks."""
         self.is_isolated = True
         self.isolation_timer = max(0, duration)
+        self.last_isolation_cell = cell
 
     def end_isolation(self) -> None:
         self.is_isolated = False
         self.isolation_timer = 0
+        self.last_isolation_cell = None
 
     def mark_released(self) -> None:
         self.was_released = True
@@ -180,3 +184,22 @@ class PrisonerLevel1(Prisoner):
                 self.isolation_timer -= 1
             if self.isolation_timer <= 0:
                 self.model._release_from_isolation(self)
+
+
+class IsolationCellMarker(Agent):
+    """Static agent marking an isolation cell on the grid."""
+
+    def __init__(self, model):
+        super().__init__(model)
+
+    def plan_move(self) -> None:
+        return
+
+    def apply_move(self) -> None:
+        return
+
+    def interact(self) -> None:
+        return
+
+    def advance_day(self) -> None:
+        return
