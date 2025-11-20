@@ -398,7 +398,6 @@ class PrisonModelLevel1(Model):
                 "releases_per_tick": lambda m: m.total_releases_this_tick,
                 "avg_fear_overall": lambda m: m._avg_fear_overall(),
                 "avg_fear_unaffiliated": lambda m: m._avg_fear_unaffiliated(),
-                "avg_same_gang_distance": lambda m: m._avg_same_gang_distance(),
                 "alive_count": lambda m: len(m._alive_prisoners()),
             }
         )
@@ -704,23 +703,6 @@ class PrisonModelLevel1(Model):
         if not unaff:
             return 0.0
         return float(sum(unaff) / len(unaff))
-
-    def _avg_same_gang_distance(self) -> float:
-        alive = [a for a in self._alive_prisoners() if a.gang_id is not None and a.pos is not None]
-        if not alive:
-            return 0.0
-        distances = []
-        by_gang: dict[int, List[Tuple[int, int]]] = {}
-        for agent in alive:
-            by_gang.setdefault(agent.gang_id, []).append(agent.pos)
-        for coords in by_gang.values():
-            if len(coords) < 2:
-                continue
-            for (x1, y1), (x2, y2) in itertools.combinations(coords, 2):
-                distances.append(abs(x1 - x2) + abs(y1 - y2))
-        if not distances:
-            return 0.0
-        return float(sum(distances) / len(distances))
 
     def get_cell_prisoners(self, pos: Tuple[int, int]) -> List[PrisonerLevel1]:
         contents = list(self.grid.iter_cell_list_contents([pos]))

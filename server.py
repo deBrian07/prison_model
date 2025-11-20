@@ -306,14 +306,7 @@ model_params_level1 = {
 
 @solara.component
 def Page():
-    """Solara page: grid + charts + controls for Level 0 and Level 1 models."""
-    level, set_level = solara.use_state("Level 0")
-    solara.Select(
-        label="Simulation level",
-        value=level,
-        values=["Level 0", "Level 1"],
-        on_value=set_level,
-    )
+    """Solara page: grid + charts + controls for the Level 1 model."""
 
     def _enlarge_space(chart):
         return chart.properties(width=250, height=250)
@@ -323,23 +316,7 @@ def Page():
         post_process=_enlarge_space,
     )
 
-    components_level0 = [
-        (space_component, 0),
-        make_mpl_plot_component(
-            {"pct_gang1": "#d62728", "pct_gang2": "#1f77b4", "pct_unaffiliated": "#888888"},
-            page=0,
-        ),
-        make_mpl_plot_component(
-            {"fights_per_tick": "#000000", "joins_per_tick": "#2ca02c"},
-            page=0,
-        ),
-        make_mpl_plot_component(
-            "alive_count",
-            page=0,
-        ),
-    ]
-
-    components_level1 = [
+    components = [
         (space_component, 0),
         make_mpl_plot_component(
             {
@@ -365,26 +342,14 @@ def Page():
             },
             page=0,
         ),
-        make_mpl_plot_component("avg_same_gang_distance", page=0),
         make_mpl_plot_component("alive_count", page=0),
     ]
 
-    if level == "Level 1":
-        model = default_model_level1()
-        components = components_level1
-        params = model_params_level1
-        title = "Prison Gangs — Level 1"
-    else:
-        model = default_model_level0()
-        components = components_level0
-        params = model_params_level0
-        title = "Prison Gangs — Level 0"
-
     return SolaraViz(
-        model,
+        default_model_level1(),
         components=components,
-        model_params=params,
-        name=title,
+        model_params=model_params_level1,
+        name="Prison Gangs — Level 1",
     )
 
 # Run with:  solara run server.py
