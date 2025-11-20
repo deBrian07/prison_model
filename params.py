@@ -45,3 +45,49 @@ class Level0Params:
 
     # Reproducibility
     seed: Optional[int] = None
+
+
+@dataclass
+class Level1Params:
+    """Inputs for the Level 1 prison model."""
+
+    # Grid size
+    grid_width: int
+    grid_height: int
+
+    # Population size
+    n_prisoners: int
+
+    # Movement settings
+    moore: bool
+    allow_stay: bool
+
+    # Violence settings
+    fight_start_prob: float
+    death_probability: float
+
+    # Trait distributions
+    internal_violence_mean: float
+    internal_violence_std: float
+    external_violence_mean: float
+    external_violence_std: float
+    strength_mean: float
+    strength_std: float
+    age_mean: float
+    age_std: float
+    sentence_mean: float
+    sentence_std: float
+
+    # Gang + joining controls
+    violence_count_threshold_join: int
+    external_violence_threshold_join: float
+    initial_affiliated_fraction: float
+    n_initial_gangs: int
+    fear_threshold: float
+
+    # Prison strictness / isolation
+    strictness_violence_threshold: int
+    isolation_duration: int
+
+    # Reproducibility
+    seed: Optional[int] = None

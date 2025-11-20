@@ -20,6 +20,7 @@ class Gang:
     name: str
     members: set = field(default_factory=set)
     reputation: float = 0.0
+    danger: float = 0.0
 
     def size(self) -> int:
         """Current number of members (alive and affiliated)."""
@@ -109,3 +110,83 @@ class Prisoner(Agent):
     def advance_day(self) -> None:
         """Daily cleanup stage. Level 0 has no extra effects."""
         return
+
+
+class PrisonerLevel1(Prisoner):
+    """Prisoner with extended attributes and isolation/sentence logic for Level 1."""
+
+    def __init__(
+        self,
+        model,
+        *,
+        internal_violence: float,
+        external_violence: float,
+        strength: float,
+        age: float,
+        sentence_length: int,
+        gang_id: Optional[int] = None,
+    ):
+        super().__init__(
+            model,
+            internal_violence=internal_violence,
+            external_violence=external_violence,
+            strength=strength,
+            gang_id=gang_id,
+        )
+        self.age: float = max(1.0, age)
+        self.sentence_remaining: int = max(1, int(round(sentence_length)))
+        self.is_isolated: bool = False
+        self.isolation_timer: int = 0
+        self.was_released: bool = False
+
+    @property
+    def fear(self) -> float:
+        """Fear proxy used for conversion decisions."""
+        numerator = max(0, self.violence_count - self.winning_fight_count)
+        return numerator / max(1.0, self.age)
+
+    def in_yard(self) -> bool:
+        """Level 1 agents in isolation are considered outside the yard."""
+        return self.alive and not self.is_isolated
+
+    def plan_move(self) -> None:
+        if self.is_isolated or not self.alive:
+            self._planned_move = None
+            return
+        super().plan_move()
+
+    def apply_move(self) -> None:
+        if self.is_isolated:
+            self._planned_move = None
+            return
+        super().apply_move()
+
+    def can_interact(self) -> bool:
+        return self.in_yard()
+
+    def start_isolation(self, duration: int) -> None:
+        """Enter isolation for a fixed number of ticks."""
+        self.is_isolated = True
+        self.isolation_timer = max(0, duration)
+
+    def end_isolation(self) -> None:
+        self.is_isolated = False
+        self.isolation_timer = 0
+
+    def mark_released(self) -> None:
+        self.was_released = True
+
+    def advance_day(self) -> None:
+        """Handle sentence countdown and isolation timers."""
+        if not self.alive:
+            return
+        if self.sentence_remaining > 0:
+            self.sentence_remaining -= 1
+            if self.sentence_remaining <= 0:
+                self.model._release_agent(self)
+                return
+        if self.is_isolated:
+            if self.isolation_timer > 0:
+                self.isolation_timer -= 1
+            if self.isolation_timer <= 0:
+                self.model._release_from_isolation(self)

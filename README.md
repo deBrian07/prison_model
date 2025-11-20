@@ -75,3 +75,8 @@ Railway deployment (full backend)
   3. Railway injects `PORT`; no extra env vars are required, but you can change `MPLCONFIGDIR` or `SOLARA_BASE_URL` in the Railway dashboard if desired.
   4. After the build succeeds, Railway will expose the public URL where the Solara dashboard runs with a persistent backend.
 - CLI alternative: install the Railway CLI, run `railway login`, `railway init`, then `railway up` to push the Docker build from your machine.
+
+Level 1 dashboard usage
+- Select “Level 1” from the toggle at the top of the Solara page to enable the expanded model (fear, isolation ring, multi-gang support).
+- Additional sliders configure: # of gangs, age/sentence distributions, fear threshold, isolation strictness/duration, etc.
+- Charts show overall affiliation + isolation shares, fights/joins/deaths/releases per tick, fear trends, spacing of gangs, and alive count.

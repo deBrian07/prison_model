@@ -15,8 +15,8 @@ from mesa.visualization.user_param import Slider
 """Solara (Mesa 3.x) dashboard to visualize the Level 0 model."""
 
 # Import local modules directly so this runs from this directory
-from model import PrisonModel
-from params import Level0Params
+from model import PrisonModel, PrisonModelLevel1
+from params import Level0Params, Level1Params
 from agents import Prisoner
 
 
@@ -64,6 +64,17 @@ _figure_altair.FigureAltair = _FigureAltairCompat  # type: ignore[attr-defined]
 # Fixed grid dimensions for the dashboard. Change here to resize the view.
 GRID_W = 30
 GRID_H = 30
+GANG_COLORS = [
+    "#d62728",
+    "#1f77b4",
+    "#2ca02c",
+    "#ff7f0e",
+    "#9467bd",
+    "#8c564b",
+    "#17becf",
+    "#bcbd22",
+]
+ISOLATION_COLOR = "#f4d03f"
 
 
 def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
@@ -73,10 +84,10 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
     if not agent.alive:
         return {"id": agent.unique_id}
     color = "#888888"
-    if agent.gang_id == 1:
-        color = "#d62728"  # red
-    elif agent.gang_id == 2:
-        color = "#1f77b4"  # blue
+    if getattr(agent, "is_isolated", False):
+        color = ISOLATION_COLOR
+    elif agent.gang_id is not None:
+        color = GANG_COLORS[(agent.gang_id - 1) % len(GANG_COLORS)]
     # Include tooltip data; X/Y duplicated capitalized for Altair tooltips
     x, y = agent.pos if agent.pos is not None else (None, None)
     # Optionally include gang reputation for affiliated agents
@@ -85,7 +96,7 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         g = agent.model.gangs.get(agent.gang_id)
         gang_rep = getattr(g, "reputation", 0.0) if g is not None else 0.0
 
-    return {
+    portrayal = {
         "id": agent.unique_id,
         "color": color,
         "gang": agent.gang_id if agent.gang_id is not None else 0,
@@ -97,10 +108,21 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         "violence_count": agent.violence_count,
         "gang_reputation": round(gang_rep, 3),
         "alive": agent.alive,
+        "is_isolated": getattr(agent, "is_isolated", False),
     }
+    age = getattr(agent, "age", None)
+    if age is not None:
+        portrayal["age"] = round(float(age), 2)
+    sentence_remaining = getattr(agent, "sentence_remaining", None)
+    if sentence_remaining is not None:
+        portrayal["sentence_remaining"] = sentence_remaining
+    fear = getattr(agent, "fear", None)
+    if fear is not None:
+        portrayal["fear"] = round(float(fear), 3)
+    return portrayal
 
 
-class AppPrisonModel(PrisonModel):
+class AppPrisonModelLevel0(PrisonModel):
     """Thin wrapper exposing keyword params for Solara controls.
 
     Keeps the core model unchanged while allowing the dashboard to reset
@@ -148,9 +170,69 @@ class AppPrisonModel(PrisonModel):
         super().__init__(p)
 
 
-def default_model() -> AppPrisonModel:
+class AppPrisonModelLevel1(PrisonModelLevel1):
+    """Wrapper exposing keyword params for Level 1 dashboard controls."""
+
+    def __init__(
+        self,
+        *,
+        n_prisoners: int,
+        n_initial_gangs: int,
+        initial_affiliated_fraction: float,
+        moore: bool,
+        allow_stay: bool,
+        fight_start_prob: float,
+        death_probability: float,
+        internal_violence_mean: float,
+        internal_violence_std: float,
+        external_violence_mean: float,
+        external_violence_std: float,
+        strength_mean: float,
+        strength_std: float,
+        age_mean: float,
+        age_std: float,
+        sentence_mean: float,
+        sentence_std: float,
+        violence_count_threshold_join: int,
+        external_violence_threshold_join: float,
+        fear_threshold: float,
+        strictness_violence_threshold: int,
+        isolation_duration: int,
+        seed: int | None = None,
+    ) -> None:
+        p = Level1Params(
+            grid_width=GRID_W,
+            grid_height=GRID_H,
+            n_prisoners=int(n_prisoners),
+            n_initial_gangs=int(n_initial_gangs),
+            initial_affiliated_fraction=float(initial_affiliated_fraction),
+            moore=bool(moore),
+            allow_stay=bool(allow_stay),
+            fight_start_prob=float(fight_start_prob),
+            death_probability=float(death_probability),
+            internal_violence_mean=float(internal_violence_mean),
+            internal_violence_std=float(internal_violence_std),
+            external_violence_mean=float(external_violence_mean),
+            external_violence_std=float(external_violence_std),
+            strength_mean=float(strength_mean),
+            strength_std=float(strength_std),
+            age_mean=float(age_mean),
+            age_std=float(age_std),
+            sentence_mean=float(sentence_mean),
+            sentence_std=float(sentence_std),
+            violence_count_threshold_join=int(violence_count_threshold_join),
+            external_violence_threshold_join=float(external_violence_threshold_join),
+            fear_threshold=float(fear_threshold),
+            strictness_violence_threshold=int(strictness_violence_threshold),
+            isolation_duration=int(isolation_duration),
+            seed=seed,
+        )
+        super().__init__(p)
+
+
+def default_model_level0() -> AppPrisonModelLevel0:
     """A reasonable default configuration for the demo app."""
-    return AppPrisonModel(
+    return AppPrisonModelLevel0(
         n_prisoners=200,
         moore=True,
         allow_stay=True,
@@ -169,8 +251,36 @@ def default_model() -> AppPrisonModel:
     )
 
 
+def default_model_level1() -> AppPrisonModelLevel1:
+    return AppPrisonModelLevel1(
+        n_prisoners=200,
+        n_initial_gangs=3,
+        initial_affiliated_fraction=0.2,
+        moore=True,
+        allow_stay=True,
+        fight_start_prob=0.1,
+        death_probability=0.05,
+        internal_violence_mean=5.0,
+        internal_violence_std=1.0,
+        external_violence_mean=5.0,
+        external_violence_std=1.0,
+        strength_mean=5.0,
+        strength_std=1.0,
+        age_mean=35.0,
+        age_std=8.0,
+        sentence_mean=365.0,
+        sentence_std=60.0,
+        violence_count_threshold_join=3,
+        external_violence_threshold_join=7.0,
+        fear_threshold=0.1,
+        strictness_violence_threshold=6,
+        isolation_duration=5,
+        seed=None,
+    )
+
+
 # Solara user-adjustable parameters
-model_params = {
+model_params_level0 = {
     "n_prisoners": Slider("# Prisoners", value=200, min=10, max=600, step=1),
     "moore": {"type": "Checkbox", "label": "Moore neighborhood (8-neigh)", "value": True},
     "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
@@ -194,12 +304,51 @@ model_params = {
     # Fixed parameters (grid size) are implied via AppPrisonModel and not user-exposed
 }
 
+model_params_level1 = {
+    "n_prisoners": Slider("# Prisoners", value=200, min=50, max=600, step=10),
+    "n_initial_gangs": Slider("# Initial gangs", value=3, min=1, max=6, step=1),
+    "initial_affiliated_fraction": Slider(
+        "Initial affiliated fraction", value=0.2, min=0.0, max=1.0, step=0.05
+    ),
+    "moore": {"type": "Checkbox", "label": "Moore neighborhood (8-neigh)", "value": True},
+    "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
+    "fight_start_prob": Slider("Fight start probability", value=0.10, min=0.0, max=1.0, step=0.01),
+    "death_probability": Slider("Death probability (loser)", value=0.05, min=0.0, max=1.0, step=0.01),
+    "internal_violence_mean": Slider("Internal violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
+    "internal_violence_std": Slider("Internal violence std", value=1.0, min=0.0, max=5.0, step=0.1),
+    "external_violence_mean": Slider("External violence mean", value=5.0, min=0.0, max=10.0, step=0.1),
+    "external_violence_std": Slider("External violence std", value=1.0, min=0.0, max=5.0, step=0.1),
+    "strength_mean": Slider("Strength mean", value=5.0, min=0.0, max=10.0, step=0.1),
+    "strength_std": Slider("Strength std", value=1.0, min=0.0, max=5.0, step=0.1),
+    "age_mean": Slider("Age mean", value=35.0, min=18.0, max=80.0, step=1.0),
+    "age_std": Slider("Age std", value=8.0, min=1.0, max=25.0, step=1.0),
+    "sentence_mean": Slider("Sentence mean (days)", value=365.0, min=30.0, max=2000.0, step=10.0),
+    "sentence_std": Slider("Sentence std", value=60.0, min=5.0, max=500.0, step=5.0),
+    "violence_count_threshold_join": Slider(
+        "Violence-count threshold to join", value=3, min=0, max=20, step=1
+    ),
+    "external_violence_threshold_join": Slider(
+        "External-violence threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
+    ),
+    "fear_threshold": Slider("Fear threshold to join", value=0.1, min=0.0, max=1.0, step=0.01),
+    "strictness_violence_threshold": Slider(
+        "Violence count for isolation", value=6, min=1, max=30, step=1
+    ),
+    "isolation_duration": Slider("Isolation duration (days)", value=5, min=1, max=30, step=1),
+}
+
 
 @solara.component
 def Page():
-    """Solara page: grid + charts + controls for the Level 0 model."""
-    model = default_model()
-    # Space visualization with tooltips; enlarge the grid display
+    """Solara page: grid + charts + controls for Level 0 and Level 1 models."""
+    level, set_level = solara.use_state("Level 0")
+    solara.Select(
+        label="Simulation level",
+        value=level,
+        values=["Level 0", "Level 1"],
+        on_value=set_level,
+    )
+
     def _enlarge_space(chart):
         return chart.properties(width=250, height=250)
 
@@ -208,8 +357,7 @@ def Page():
         post_process=_enlarge_space,
     )
 
-    # Charts: affiliation shares, fights/joins per tick, and alive count
-    components = [
+    components_level0 = [
         (space_component, 0),
         make_mpl_plot_component(
             {"pct_gang1": "#d62728", "pct_gang2": "#1f77b4", "pct_unaffiliated": "#888888"},
@@ -225,11 +373,52 @@ def Page():
         ),
     ]
 
+    components_level1 = [
+        (space_component, 0),
+        make_mpl_plot_component(
+            {
+                "pct_affiliated": "#d62728",
+                "pct_unaffiliated": "#888888",
+                "pct_isolated": ISOLATION_COLOR,
+            },
+            page=0,
+        ),
+        make_mpl_plot_component(
+            {
+                "fights_per_tick": "#000000",
+                "joins_per_tick": "#2ca02c",
+                "deaths_per_tick": "#d62728",
+                "releases_per_tick": "#1f77b4",
+            },
+            page=0,
+        ),
+        make_mpl_plot_component(
+            {
+                "avg_fear_overall": "#9467bd",
+                "avg_fear_unaffiliated": "#bcbd22",
+            },
+            page=0,
+        ),
+        make_mpl_plot_component("avg_same_gang_distance", page=0),
+        make_mpl_plot_component("alive_count", page=0),
+    ]
+
+    if level == "Level 1":
+        model = default_model_level1()
+        components = components_level1
+        params = model_params_level1
+        title = "Prison Gangs — Level 1"
+    else:
+        model = default_model_level0()
+        components = components_level0
+        params = model_params_level0
+        title = "Prison Gangs — Level 0"
+
     return SolaraViz(
         model,
         components=components,
-        model_params=model_params,
-        name="Prison Gangs — Level 0",
+        model_params=params,
+        name=title,
     )
 
 # Run with:  solara run server.py
