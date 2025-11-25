@@ -627,6 +627,8 @@ class PrisonModelLevel1(Model):
         self._evaluate_isolation(b)
 
     def _evaluate_isolation(self, agent: PrisonerLevel1) -> None:
+        if not agent.alive or agent.pos is None:
+            return
         if agent.is_isolated:
             return
         if self.params.strictness_violence_threshold <= 0:
@@ -635,6 +637,8 @@ class PrisonModelLevel1(Model):
             self._send_to_isolation(agent)
 
     def _send_to_isolation(self, agent: PrisonerLevel1) -> None:
+        if not agent.alive or agent.pos is None:
+            return
         if not self.isolation_cells:
             return
         cell = self.random.choice(list(self.isolation_cells))
