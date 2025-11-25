@@ -79,6 +79,17 @@ ISOLATION_COLOR = "#f4d03f"
 
 def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
     """Encode how a Prisoner appears on the grid and in tooltips."""
+
+    def _fmt(val, precision: int | None = None) -> str:
+        if val is None:
+            return "N/A"
+        if precision is not None:
+            try:
+                return f"{float(val):.{precision}f}"
+            except (TypeError, ValueError):
+                return str(val)
+        return str(val)
+
     if isinstance(agent, IsolationCellMarker):
         x, y = agent.pos if agent.pos is not None else (None, None)
         return {
@@ -87,7 +98,14 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
             "legend_label": "Isolation Cell",
             "X": x,
             "Y": y,
-            "zone": "Isolation",
+            "Affiliation": "Isolation Cell",
+            "Status": "Isolation Cell",
+            "Strength": "N/A",
+            "Violence Count": "N/A",
+            "Winning Fights": "N/A",
+            "Fear": "N/A",
+            "Age": "N/A",
+            "Sentence Remaining": "N/A",
             "gang": -1,
         }
     if not isinstance(agent, Prisoner):
@@ -96,6 +114,11 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         return {"id": agent.unique_id}
     color = "#888888"
     label = "Unaffiliated"
+    status = "In Yard"
+    if getattr(agent, "is_isolated", False):
+        status = "In Isolation"
+    if not agent.alive:
+        status = "Deceased"
     if agent.gang_id is not None:
         color = GANG_COLORS[(agent.gang_id - 1) % len(GANG_COLORS)]
         gang = agent.model.gangs.get(agent.gang_id) if hasattr(agent.model, "gangs") else None
@@ -104,11 +127,9 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         gang = None
     # Include tooltip data; X/Y duplicated capitalized for Altair tooltips
     x, y = agent.pos if agent.pos is not None else (None, None)
-    # Optionally include gang reputation for affiliated agents
-    gang_rep = 0.0
-    if agent.gang_id is not None:
-        g = gang if gang is not None else agent.model.gangs.get(agent.gang_id)
-        gang_rep = getattr(g, "reputation", 0.0) if g is not None else 0.0
+    fear = getattr(agent, "fear", None)
+    age = getattr(agent, "age", None)
+    sentence_remaining = getattr(agent, "sentence_remaining", None)
 
     portrayal = {
         "id": agent.unique_id,
@@ -117,21 +138,20 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         "gang": agent.gang_id if agent.gang_id is not None else 0,
         "X": x,
         "Y": y,
-        "strength": round(agent.strength, 3),
-        "violence_count": agent.violence_count,
-        "gang_reputation": round(gang_rep, 3),
         "alive": agent.alive,
         "is_isolated": getattr(agent, "is_isolated", False),
     }
-    age = getattr(agent, "age", None)
-    if age is not None:
-        portrayal["age"] = round(float(age), 2)
-    sentence_remaining = getattr(agent, "sentence_remaining", None)
-    if sentence_remaining is not None:
-        portrayal["sentence_remaining"] = sentence_remaining
-    fear = getattr(agent, "fear", None)
-    if fear is not None:
-        portrayal["fear"] = round(float(fear), 3)
+    tooltip_fields = {
+        "Affiliation": label,
+        "Status": status,
+        "Strength": _fmt(agent.strength, 3),
+        "Violence Count": _fmt(agent.violence_count),
+        "Winning Fights": _fmt(agent.winning_fight_count),
+        "Fear": _fmt(fear, 3),
+        "Age": _fmt(age, 2),
+        "Sentence Remaining": _fmt(sentence_remaining),
+    }
+    portrayal.update(tooltip_fields)
     return portrayal
 
 
@@ -345,12 +365,23 @@ def Page():
             return chart
         domain = list(label_to_color.keys())
         color_range = [label_to_color[label] for label in domain]
+        tooltip_fields = [
+            alt.Tooltip("Affiliation:N"),
+            alt.Tooltip("Status:N"),
+            alt.Tooltip("Strength:N"),
+            alt.Tooltip("Violence Count:N"),
+            alt.Tooltip("Winning Fights:N"),
+            alt.Tooltip("Fear:N"),
+            alt.Tooltip("Age:N"),
+            alt.Tooltip("Sentence Remaining:N"),
+        ]
         return chart.encode(
             color=alt.Color(
                 "legend_label:N",
                 scale=alt.Scale(domain=domain, range=color_range),
                 legend=alt.Legend(title="Affiliation"),
-            )
+            ),
+            tooltip=tooltip_fields,
         )
 
     space_component = make_altair_space(
