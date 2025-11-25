@@ -84,6 +84,7 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
         return {
             "id": f"isolation-{x}-{y}",
             "color": ISOLATION_COLOR,
+            "legend_label": "Isolation Cell",
             "X": x,
             "Y": y,
             "zone": "Isolation",
@@ -94,19 +95,25 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
     if not agent.alive:
         return {"id": agent.unique_id}
     color = "#888888"
+    label = "Unaffiliated"
     if agent.gang_id is not None:
         color = GANG_COLORS[(agent.gang_id - 1) % len(GANG_COLORS)]
+        gang = agent.model.gangs.get(agent.gang_id) if hasattr(agent.model, "gangs") else None
+        label = getattr(gang, "name", None) or f"Gang {agent.gang_id}"
+    else:
+        gang = None
     # Include tooltip data; X/Y duplicated capitalized for Altair tooltips
     x, y = agent.pos if agent.pos is not None else (None, None)
     # Optionally include gang reputation for affiliated agents
     gang_rep = 0.0
     if agent.gang_id is not None:
-        g = agent.model.gangs.get(agent.gang_id)
+        g = gang if gang is not None else agent.model.gangs.get(agent.gang_id)
         gang_rep = getattr(g, "reputation", 0.0) if g is not None else 0.0
 
     portrayal = {
         "id": agent.unique_id,
         "color": color,
+        "legend_label": label,
         "gang": agent.gang_id if agent.gang_id is not None else 0,
         "X": x,
         "Y": y,
@@ -316,12 +323,39 @@ model_params_level1 = {
 def Page():
     """Solara page: grid + charts + controls for the Level 1 model."""
 
-    def _enlarge_space(chart):
-        return chart.properties(width=250, height=250)
+    def _style_space_chart(chart):
+        chart = chart.properties(width=250, height=250)
+        data_values = getattr(getattr(chart, "data", None), "values", None)
+        if not data_values and hasattr(chart, "layer"):
+            for layer_chart in getattr(chart, "layer", []):
+                layer_values = getattr(getattr(layer_chart, "data", None), "values", None)
+                if layer_values:
+                    data_values = layer_values
+                    break
+        if not data_values:
+            return chart
+        label_to_color = {}
+        for entry in data_values:
+            label = entry.get("legend_label")
+            color = entry.get("color")
+            if not label or not color or label in label_to_color:
+                continue
+            label_to_color[label] = color
+        if not label_to_color:
+            return chart
+        domain = list(label_to_color.keys())
+        color_range = [label_to_color[label] for label in domain]
+        return chart.encode(
+            color=alt.Color(
+                "legend_label:N",
+                scale=alt.Scale(domain=domain, range=color_range),
+                legend=alt.Legend(title="Affiliation"),
+            )
+        )
 
     space_component = make_altair_space(
         agent_portrayal,
-        post_process=_enlarge_space,
+        post_process=_style_space_chart,
     )
 
     components = [
