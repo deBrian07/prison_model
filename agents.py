@@ -5,16 +5,12 @@ from typing import Optional, Tuple, List
 
 from mesa import Agent
 
-"""Agent definitions for the prison model.
-
-- Gang: simple container for gang identity, members, and reputation.
-- Prisoner: a Mesa Agent with movement, interaction, and basic state.
-"""
+"""Agent types for the Level 1 prison model."""
 
 
 @dataclass
 class Gang:
-    """Represents a gang and tracks its members and reputation."""
+    """Gang container tracking members, reputation, and danger."""
 
     gang_id: int
     name: str
@@ -28,13 +24,7 @@ class Gang:
 
 
 class Prisoner(Agent):
-    """An inmate in the prison yard.
-
-    Attributes of interest:
-    - strength: used to determine fight outcomes (also proxies fear pressure)
-    - gang_id: current gang affiliation (None means unaffiliated)
-    - alive: whether the prisoner is still in the simulation
-    """
+    """Base prisoner agent with shared movement and state."""
 
     def __init__(
         self,
@@ -51,13 +41,11 @@ class Prisoner(Agent):
         self.winning_fight_count = 0
         self.alive = True
 
-        # Movement planned for this tick (set in plan_move, used in apply_move)
         self._planned_move: Optional[Tuple[int, int]] = None
-        # Used to prevent duplicate interactions in a cell during a tick
         self._interacted_this_tick = False
 
     def in_yard(self) -> bool:
-        """Returns True if the prisoner is alive and present on the grid."""
+        """True if the prisoner is alive and present on the grid."""
         return self.alive
 
     def can_interact(self) -> bool:
@@ -83,18 +71,13 @@ class Prisoner(Agent):
         self._planned_move = None
 
     def interact(self) -> None:
-        """Trigger one round of pairwise interactions for this cell.
-
-        Only the lowest-ID agent in a cell starts the interaction routine to
-        avoid processing the same pairs multiple times.
-        """
+        """Trigger one round of pairwise interactions for this cell."""
         self._interacted_this_tick = False
         if not self.can_interact():
             return
         cell_agents: List[Prisoner] = self.model.get_cell_prisoners(self.pos)
         if len(cell_agents) < 2:
             return
-        # Let a single canonical agent drive interactions in this cell
         if self.unique_id != min(a.unique_id for a in cell_agents):
             return
         if self._interacted_this_tick:
@@ -102,12 +85,12 @@ class Prisoner(Agent):
         self.model.resolve_cell_interactions(self.pos)
 
     def advance_day(self) -> None:
-        """Daily cleanup stage. Level 0 has no extra effects."""
+        """Hook for subclasses."""
         return
 
 
 class PrisonerLevel1(Prisoner):
-    """Prisoner with extended attributes and isolation/sentence logic for Level 1."""
+    """Prisoner with isolation, sentences, and fear logic."""
 
     def __init__(
         self,

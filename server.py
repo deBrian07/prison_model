@@ -12,11 +12,11 @@ from mesa.visualization.components.matplotlib_components import (
 )
 from mesa.visualization.user_param import Slider
 
-"""Solara (Mesa 3.x) dashboard to visualize the Level 0 model."""
+"""Solara (Mesa 3.x) dashboard to visualize the Level 1 model."""
 
 # Import local modules directly so this runs from this directory
-from model import PrisonModel, PrisonModelLevel1
-from params import Level0Params, Level1Params
+from model import PrisonModelLevel1
+from params import Level1Params
 from agents import Prisoner, IsolationCellMarker
 
 
@@ -155,46 +155,6 @@ def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
     return portrayal
 
 
-class AppPrisonModelLevel0(PrisonModel):
-    """Thin wrapper exposing keyword params for Solara controls.
-
-    Keeps the core model unchanged while allowing the dashboard to reset
-    and instantiate using individual sliders/checkboxes.
-    """
-
-    def __init__(
-        self,
-        *,
-        n_prisoners: int,
-        moore: bool,
-        allow_stay: bool,
-        fight_start_prob: float,
-        death_probability: float,
-        strength_mean: float,
-        strength_std: float,
-        violence_count_threshold_join: int,
-        strength_threshold_join: float,
-        initial_affiliated_fraction: float,
-        seed: int | None = None,
-    ) -> None:
-        p = Level0Params(
-            grid_width=GRID_W,
-            grid_height=GRID_H,
-            n_prisoners=int(n_prisoners),
-            moore=bool(moore),
-            allow_stay=bool(allow_stay),
-            fight_start_prob=float(fight_start_prob),
-            death_probability=float(death_probability),
-            strength_mean=float(strength_mean),
-            strength_std=float(strength_std),
-            violence_count_threshold_join=int(violence_count_threshold_join),
-            strength_threshold_join=float(strength_threshold_join),
-            initial_affiliated_fraction=float(initial_affiliated_fraction),
-            seed=seed,
-        )
-        super().__init__(p)
-
-
 class AppPrisonModelLevel1(PrisonModelLevel1):
     """Wrapper exposing keyword params for Level 1 dashboard controls."""
 
@@ -247,23 +207,6 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
         super().__init__(p)
 
 
-def default_model_level0() -> AppPrisonModelLevel0:
-    """A reasonable default configuration for the demo app."""
-    return AppPrisonModelLevel0(
-        n_prisoners=200,
-        moore=True,
-        allow_stay=True,
-        fight_start_prob=0.10,
-        death_probability=0.05,
-        strength_mean=5.0,
-        strength_std=1.0,
-        violence_count_threshold_join=3,
-        strength_threshold_join=7.0,
-        initial_affiliated_fraction=0.0,
-        seed=None,
-    )
-
-
 def default_model_level1() -> AppPrisonModelLevel1:
     return AppPrisonModelLevel1(
         n_prisoners=200,
@@ -286,28 +229,6 @@ def default_model_level1() -> AppPrisonModelLevel1:
         isolation_duration=5,
         seed=None,
     )
-
-
-# Solara user-adjustable parameters
-model_params_level0 = {
-    "n_prisoners": Slider("# Prisoners", value=200, min=10, max=600, step=1),
-    "moore": {"type": "Checkbox", "label": "Moore neighborhood (8-neigh)", "value": True},
-    "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
-    "fight_start_prob": Slider("Fight start probability", value=0.10, min=0.0, max=1.0, step=0.01),
-    "death_probability": Slider("Death probability (loser)", value=0.05, min=0.0, max=1.0, step=0.01),
-    "strength_mean": Slider("Strength mean", value=5.0, min=0.0, max=10.0, step=0.1),
-    "strength_std": Slider("Strength std", value=1.0, min=0.0, max=5.0, step=0.1),
-    "violence_count_threshold_join": Slider(
-        "Violence-count threshold to join", value=3, min=0, max=20, step=1
-    ),
-    "strength_threshold_join": Slider(
-        "Strength threshold to join", value=7.0, min=0.0, max=10.0, step=0.1
-    ),
-    "initial_affiliated_fraction": Slider(
-        "Initial affiliated fraction", value=0.0, min=0.0, max=1.0, step=0.05
-    ),
-    # Fixed parameters (grid size) are implied via AppPrisonModel and not user-exposed
-}
 
 model_params_level1 = {
     "n_prisoners": Slider("# Prisoners", value=200, min=50, max=600, step=10),
