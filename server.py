@@ -5,12 +5,13 @@ from typing import Any, Dict
 import altair as alt
 import solara
 from solara.components import figure_altair as _figure_altair
-from mesa.visualization.solara_viz import SolaraViz
 from mesa.visualization.components.altair_components import make_altair_space
 from mesa.visualization.components.matplotlib_components import (
     make_mpl_plot_component,
 )
 from mesa.visualization.user_param import Slider
+from mesa.visualization import solara_viz as mesa_solara_viz
+from mesa.experimental.devs.simulator import Simulator
 
 """Solara (Mesa 3.x) dashboard to visualize the Level 1 model."""
 
@@ -75,6 +76,153 @@ GANG_COLORS = [
     "#bcbd22",
 ]
 ISOLATION_COLOR = "#f4d03f"
+
+
+def _compact_layout(num_components: int):
+    return [
+        {
+            "i": i,
+            "w": 5,
+            "h": 10,
+            "moved": False,
+            "x": 5 * (i % 2),
+            "y": 16 * (i - i % 2),
+        }
+        for i in range(num_components)
+    ]
+
+
+mesa_solara_viz.make_initial_grid_layout = _compact_layout
+
+
+def _speed_to_intervals(speed: int) -> tuple[int, int]:
+    """Map a speed knob (1-100) to play/render intervals."""
+    speed = max(1, min(100, int(speed)))
+    play_interval = int(round(500 - (speed - 1) * 4.8))  # 500 -> 20 ms
+    render_interval = max(1, int(round(5 - (speed - 1) * 0.05)))  # 5 -> 1 steps
+    return play_interval, render_interval
+
+
+def _speed_from_play(play_interval: int) -> int:
+    """Inverse of _speed_to_intervals for initial slider value."""
+    return max(1, min(100, int(round(1 + (500 - play_interval) / 4.8))))
+
+
+@solara.component
+def SolaraVizSpeed(
+    model,
+    renderer=None,
+    components=[],
+    *,
+    play_interval: int = 100,
+    render_interval: int = 1,
+    simulator=None,
+    model_params=None,
+    name=None,
+    use_threads: bool = False,
+    **console_kwargs,
+):
+    """SolaraViz variant with a single speed slider for play+render intervals."""
+    if components == "default":
+        components = [
+            (
+                mesa_solara_viz.components_altair.make_altair_space(
+                    agent_portrayal=None,
+                    propertylayer_portrayal=None,
+                    post_process=None,
+                ),
+                0,
+            )
+        ]
+    if model_params is None:
+        model_params = {}
+
+    if not isinstance(model, solara.Reactive):
+        model = solara.use_reactive(model)  # noqa: RUF100  # noqa: SH102
+
+    reactive_model_parameters = solara.use_reactive({})
+    reactive_play_interval = solara.use_reactive(play_interval)
+    reactive_render_interval = solara.use_reactive(render_interval)
+    reactive_use_threads = solara.use_reactive(use_threads)
+    reactive_speed = solara.use_reactive(_speed_from_play(play_interval))
+
+    def set_speed(value: int):
+        speed = max(1, min(100, int(value)))
+        p, r = _speed_to_intervals(speed)
+        reactive_speed.set(speed)
+        reactive_play_interval.set(p)
+        reactive_render_interval.set(r)
+
+    # Keep intervals aligned with the current speed on first render
+    solara.use_effect(lambda: set_speed(reactive_speed.value), [])
+
+    display_components = list(components)
+    if renderer is not None:
+        if isinstance(renderer, mesa_solara_viz.SpaceRenderer):
+            renderer = solara.use_reactive(renderer)  # noqa: RUF100  # noqa: SH102
+        display_components.insert(0, (mesa_solara_viz.create_space_component(renderer.value), 0))
+
+    with solara.AppBar():
+        solara.AppBarTitle(name if name else model.value.__class__.__name__)
+        solara.lab.ThemeToggle()
+
+    with solara.Sidebar(), solara.Column():
+        with solara.Card("Controls"):
+            solara.SliderInt(
+                label="Speed",
+                value=reactive_speed,
+                on_value=set_speed,
+                min=1,
+                max=100,
+                step=1,
+            )
+            solara.Text("Higher = faster (lower delay + more frequent renders)")
+
+            if reactive_use_threads.value:
+                solara.Text("Increase delay if plots are skipped")
+
+            solara.Checkbox(
+                label="Use Threads",
+                value=reactive_use_threads,
+                on_value=lambda v: reactive_use_threads.set(v),
+            )
+
+            if not isinstance(simulator, Simulator):
+                mesa_solara_viz.ModelController(
+                    model,
+                    renderer=renderer,
+                    model_parameters=reactive_model_parameters,
+                    play_interval=reactive_play_interval,
+                    render_interval=reactive_render_interval,
+                    use_threads=reactive_use_threads,
+                )
+            else:
+                mesa_solara_viz.SimulatorController(
+                    model,
+                    simulator,
+                    renderer=renderer,
+                    model_parameters=reactive_model_parameters,
+                    play_interval=reactive_play_interval,
+                    render_interval=reactive_render_interval,
+                    use_threads=reactive_use_threads,
+                )
+        with solara.Card("Model Parameters"):
+            mesa_solara_viz.ModelCreator(
+                model, model_params, model_parameters=reactive_model_parameters
+            )
+        with solara.Card("Information"):
+            mesa_solara_viz.ShowSteps(model.value)
+        if (
+            mesa_solara_viz.CommandConsole in display_components
+        ):  # If command console in components show it in sidebar
+            display_components.remove(mesa_solara_viz.CommandConsole)
+            additional_imports = console_kwargs.get("additional_imports", {})
+            with solara.Card("Command Console"):
+                mesa_solara_viz.CommandConsole(
+                    model.value, additional_imports=additional_imports
+                )
+
+    mesa_solara_viz.ComponentsView(display_components, model.value)
 
 
 def agent_portrayal(agent: Prisoner) -> Dict[str, Any]:
@@ -164,7 +312,6 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
         n_prisoners: int,
         n_initial_gangs: int,
         initial_affiliated_fraction: float,
-        moore: bool,
         allow_stay: bool,
         fight_start_prob: float,
         death_probability: float,
@@ -187,7 +334,7 @@ class AppPrisonModelLevel1(PrisonModelLevel1):
             n_prisoners=int(n_prisoners),
             n_initial_gangs=int(n_initial_gangs),
             initial_affiliated_fraction=float(initial_affiliated_fraction),
-            moore=bool(moore),
+            moore=True,
             allow_stay=bool(allow_stay),
             fight_start_prob=float(fight_start_prob),
             death_probability=float(death_probability),
@@ -212,7 +359,6 @@ def default_model_level1() -> AppPrisonModelLevel1:
         n_prisoners=200,
         n_initial_gangs=3,
         initial_affiliated_fraction=0.2,
-        moore=True,
         allow_stay=True,
         fight_start_prob=0.1,
         death_probability=0.05,
@@ -236,7 +382,6 @@ model_params_level1 = {
     "initial_affiliated_fraction": Slider(
         "Initial affiliated fraction", value=0.2, min=0.0, max=1.0, step=0.05
     ),
-    "moore": {"type": "Checkbox", "label": "Moore neighborhood (8-neigh)", "value": True},
     "allow_stay": {"type": "Checkbox", "label": "Allow stay-in-place moves", "value": True},
     "fight_start_prob": Slider("Fight start probability", value=0.10, min=0.0, max=1.0, step=0.01),
     "death_probability": Slider("Death probability (loser)", value=0.05, min=0.0, max=1.0, step=0.01),
@@ -339,7 +484,7 @@ def Page():
         make_mpl_plot_component("alive_count", page=0),
     ]
 
-    return SolaraViz(
+    return SolaraVizSpeed(
         default_model_level1(),
         components=components,
         model_params=model_params_level1,

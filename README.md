@@ -9,7 +9,7 @@ Contents
 
 Level 1 features
 - 2D bounded grid with an isolation ring.
-- Configurable gang count, initial affiliation share, and movement rules (Moore/Von Neumann, optional stay).
+- Configurable gang count, initial affiliation share, and stay-in-place toggle. Movement uses a fixed Moore (8-neighbor) neighborhood.
 - Fights with probabilistic starts and deaths; strength decides winners and feeds reputation/danger.
 - Joining driven by fear, strength threshold, or accumulated violence when facing an affiliated agent.
 - Isolation triggered by violence counts; timers move agents back to the yard or mark releases when sentences end.
