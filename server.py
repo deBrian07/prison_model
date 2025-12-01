@@ -5,6 +5,7 @@ from typing import Any, Dict
 import altair as alt
 import solara
 from solara.components import figure_altair as _figure_altair
+from matplotlib.figure import Figure
 from mesa.visualization.components.altair_components import make_altair_space
 from mesa.visualization.components.matplotlib_components import (
     make_mpl_plot_component,
@@ -12,6 +13,7 @@ from mesa.visualization.components.matplotlib_components import (
 from mesa.visualization.user_param import Slider
 from mesa.visualization import solara_viz as mesa_solara_viz
 from mesa.experimental.devs.simulator import Simulator
+from mesa.visualization.utils import update_counter
 
 """Solara (Mesa 3.x) dashboard to visualize the Level 1 model."""
 
@@ -76,6 +78,7 @@ GANG_COLORS = [
     "#bcbd22",
 ]
 ISOLATION_COLOR = "#f4d03f"
+MAX_GANG_SERIES = 6
 
 
 def _compact_layout(num_components: int):
@@ -460,16 +463,36 @@ def Page():
         post_process=_style_space_chart,
     )
 
+    @solara.component
+    def GangSharePlot(model):
+        update_counter.get()
+        fig = Figure(figsize=(4.5, 3.2))
+        ax = fig.subplots()
+        df = model.datacollector.get_model_vars_dataframe()
+        n = getattr(getattr(model, "params", None), "n_initial_gangs", 1)
+        n = max(1, min(MAX_GANG_SERIES, int(n)))
+        for gid in range(1, n + 1):
+            col = f"pct_gang{gid}"
+            if col in df.columns:
+                ax.plot(
+                    df.index,
+                    df[col],
+                    label=col,
+                    color=GANG_COLORS[(gid - 1) % len(GANG_COLORS)],
+                )
+        if "pct_unaffiliated" in df.columns:
+            ax.plot(df.index, df["pct_unaffiliated"], label="pct_unaffiliated", color="#888888")
+        if "pct_isolated" in df.columns:
+            ax.plot(df.index, df["pct_isolated"], label="pct_isolated", color=ISOLATION_COLOR)
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Share")
+        ax.set_ylim(0, 1)
+        ax.legend(loc="best", fontsize=9)
+        solara.FigureMatplotlib(fig, format="png", bbox_inches="tight")
+
     components = [
         (space_component, 0),
-        make_mpl_plot_component(
-            {
-                "pct_affiliated": "#d62728",
-                "pct_unaffiliated": "#888888",
-                "pct_isolated": ISOLATION_COLOR,
-            },
-            page=0,
-        ),
+        (GangSharePlot, 0),
         make_mpl_plot_component(
             {
                 "fights_per_tick": "#000000",

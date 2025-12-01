@@ -7,6 +7,8 @@ from mesa import Model
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 
+MAX_GANG_REPORTS = 6
+
 # Allow imports to work both as a package and as local modules
 try:  # package-style imports
     from .agents import PrisonerLevel1, Gang, IsolationCellMarker
@@ -50,20 +52,22 @@ class PrisonModelLevel1(Model):
 
         self._init_agents()
 
-        self.datacollector = DataCollector(
-            model_reporters={
-                "pct_affiliated": lambda m: m._pct_affiliated(),
-                "pct_unaffiliated": lambda m: m._pct_unaffiliated(),
-                "pct_isolated": lambda m: m._pct_isolated(),
-                "fights_per_tick": lambda m: m.total_fights_this_tick,
-                "joins_per_tick": lambda m: m.total_joins_this_tick,
-                "deaths_per_tick": lambda m: m.total_deaths_this_tick,
-                "releases_per_tick": lambda m: m.total_releases_this_tick,
-                "avg_fear_overall": lambda m: m._avg_fear_overall(),
-                "avg_fear_unaffiliated": lambda m: m._avg_fear_unaffiliated(),
-                "alive_count": lambda m: len(m._alive_prisoners()),
-            }
-        )
+        reporters = {
+            "pct_unaffiliated": lambda m: m._pct_unaffiliated(),
+            "pct_isolated": lambda m: m._pct_isolated(),
+            "fights_per_tick": lambda m: m.total_fights_this_tick,
+            "joins_per_tick": lambda m: m.total_joins_this_tick,
+            "deaths_per_tick": lambda m: m.total_deaths_this_tick,
+            "releases_per_tick": lambda m: m.total_releases_this_tick,
+            "avg_fear_overall": lambda m: m._avg_fear_overall(),
+            "avg_fear_unaffiliated": lambda m: m._avg_fear_unaffiliated(),
+            "alive_count": lambda m: len(m._alive_prisoners()),
+        }
+        max_gang = max(1, min(MAX_GANG_REPORTS, int(self.params.n_initial_gangs)))
+        for gid in range(1, max_gang + 1):
+            reporters[f"pct_gang{gid}"] = lambda m, gid=gid: m._pct_in_gang(gid)
+
+        self.datacollector = DataCollector(model_reporters=reporters)
         self.datacollector.collect(self)
 
     def _init_gangs(self) -> None:
@@ -407,6 +411,13 @@ class PrisonModelLevel1(Model):
             return 0.0
         iso = sum(1 for a in alive if a.is_isolated)
         return iso / len(alive)
+
+    def _pct_in_gang(self, gang_id: int) -> float:
+        alive = self._alive_prisoners()
+        if not alive:
+            return 0.0
+        in_gang = sum(1 for a in alive if a.gang_id == gang_id)
+        return in_gang / len(alive)
 
     def _avg_fear_overall(self) -> float:
         alive = self._alive_prisoners()
