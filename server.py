@@ -424,15 +424,26 @@ def Page():
         if not data_values:
             return chart
         label_to_color = {}
+        counts = {}
         for entry in data_values:
             label = entry.get("legend_label")
             color = entry.get("color")
             if not label or not color or label in label_to_color:
                 continue
             label_to_color[label] = color
+            counts[label] = counts.get(label, 0) + 1
         if not label_to_color:
             return chart
-        domain = list(label_to_color.keys())
+        isolation_label = "Isolation Cell"
+        domain_no_iso = [l for l in label_to_color.keys() if l != isolation_label]
+        total_non_iso = sum(counts.get(l, 0) for l in domain_no_iso)
+        if total_non_iso <= 0:
+            domain_no_iso.sort()
+        else:
+            domain_no_iso.sort(
+                key=lambda l: counts.get(l, 0) / total_non_iso, reverse=True
+            )
+        domain = domain_no_iso + ([isolation_label] if isolation_label in label_to_color else [])
         color_range = [label_to_color[label] for label in domain]
         tooltip_fields = [
             alt.Tooltip("Affiliation:N"),
