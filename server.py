@@ -83,10 +83,10 @@ def _compact_layout(num_components: int):
         {
             "i": i,
             "w": 5,
-            "h": 10,
+            "h": 11,
             "moved": False,
             "x": 5 * (i % 2),
-            "y": 16 * (i - i % 2),
+            "y": 18 * (i - i % 2),
         }
         for i in range(num_components)
     ]
@@ -410,7 +410,7 @@ def Page():
     """Solara page: grid + charts + controls for the Level 1 model."""
 
     def _style_space_chart(chart):
-        chart = chart.properties(width=250, height=250)
+        chart = chart.properties(width=300, height=300)
         data_values = getattr(getattr(chart, "data", None), "values", None)
         if not data_values and hasattr(chart, "layer"):
             for layer_chart in getattr(chart, "layer", []):
@@ -445,7 +445,12 @@ def Page():
             color=alt.Color(
                 "legend_label:N",
                 scale=alt.Scale(domain=domain, range=color_range),
-                legend=alt.Legend(title="Affiliation"),
+                legend=alt.Legend(
+                    title="Affiliation",
+                    labelFontSize=12,
+                    titleFontSize=13,
+                    symbolSize=90,
+                ),
             ),
             tooltip=tooltip_fields,
         )
