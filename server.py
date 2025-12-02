@@ -6,6 +6,11 @@ import altair as alt
 import solara
 from solara.components import figure_altair as _figure_altair
 from matplotlib.figure import Figure
+try:
+    from solara import use_media_query
+except Exception:  # fallback for older Solara versions
+    def use_media_query(_query: str) -> bool:  # type: ignore
+        return False
 from mesa.visualization.components.altair_components import make_altair_space
 from mesa.visualization.components.matplotlib_components import (
     make_mpl_plot_component,
@@ -413,7 +418,9 @@ def Page():
     """Solara page: grid + charts + controls for the Level 1 model."""
 
     def _style_space_chart(chart):
-        chart = chart.properties(width=300, height=300)
+        is_mobile = use_media_query("(max-width: 640px)")
+        size = 240 if is_mobile else 300
+        chart = chart.properties(width=size, height=size)
         data_values = getattr(getattr(chart, "data", None), "values", None)
         if not data_values and hasattr(chart, "layer"):
             for layer_chart in getattr(chart, "layer", []):
@@ -476,8 +483,9 @@ def Page():
 
     @solara.component
     def GangSharePlot(model):
+        is_mobile = use_media_query("(max-width: 640px)")
         update_counter.get()
-        fig = Figure(figsize=(4.5, 3.2))
+        fig = Figure(figsize=(3.6, 2.7) if is_mobile else (4.5, 3.2))
         ax = fig.subplots()
         df = model.datacollector.get_model_vars_dataframe()
         n = getattr(getattr(model, "params", None), "n_initial_gangs", 1)
