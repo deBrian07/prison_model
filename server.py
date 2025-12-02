@@ -6,6 +6,7 @@ import altair as alt
 import solara
 from solara.components import figure_altair as _figure_altair
 from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 try:
     from solara import use_media_query
 except Exception:  # fallback for older Solara versions
@@ -84,6 +85,7 @@ GANG_COLORS = [
 ]
 ISOLATION_COLOR = "#f4d03f"
 MAX_GANG_SERIES = 6
+MAX_TAIL_POINTS = 300
 
 
 def _compact_layout(num_components: int):
@@ -106,14 +108,14 @@ mesa_solara_viz.make_initial_grid_layout = _compact_layout
 def _speed_to_intervals(speed: int) -> tuple[int, int]:
     """Map a speed knob (1-100) to play/render intervals."""
     speed = max(1, min(100, int(speed)))
-    play_interval = int(round(500 - (speed - 1) * 4.8))  # 500 -> 20 ms
-    render_interval = max(1, int(round(5 - (speed - 1) * 0.05)))  # 5 -> 1 steps
+    play_interval = int(round(500 - (speed - 1) * 3.8))  # 500 -> ~125 ms
+    render_interval = max(3, int(round(12 - (speed - 1) * 0.09)))  # 12 -> ~3 steps
     return play_interval, render_interval
 
 
 def _speed_from_play(play_interval: int) -> int:
     """Inverse of _speed_to_intervals for initial slider value."""
-    return max(1, min(100, int(round(1 + (500 - play_interval) / 4.8))))
+    return max(1, min(100, int(round(1 + (500 - play_interval) / 3.8))))
 
 
 @solara.component
@@ -419,7 +421,7 @@ def Page():
 
     def _style_space_chart(chart):
         is_mobile = use_media_query("(max-width: 640px)")
-        size = 240 if is_mobile else 300
+        size = 280 if is_mobile else 380
         chart = chart.properties(width=size, height=size)
         data_values = getattr(getattr(chart, "data", None), "values", None)
         if not data_values and hasattr(chart, "layer"):
@@ -462,7 +464,7 @@ def Page():
             alt.Tooltip("Age:N"),
             alt.Tooltip("Sentence Remaining:N"),
         ]
-        return chart.encode(
+        chart = chart.encode(
             color=alt.Color(
                 "legend_label:N",
                 scale=alt.Scale(domain=domain, range=color_range),
@@ -475,6 +477,7 @@ def Page():
             ),
             tooltip=tooltip_fields,
         )
+        return chart.mark_circle(size=65)
 
     space_component = make_altair_space(
         agent_portrayal,
@@ -485,7 +488,7 @@ def Page():
     def GangSharePlot(model):
         is_mobile = use_media_query("(max-width: 640px)")
         update_counter.get()
-        fig = Figure(figsize=(3.6, 2.7) if is_mobile else (4.5, 3.2))
+        fig = Figure(figsize=(5.0, 3.7) if is_mobile else (7.0, 5.0))
         ax = fig.subplots()
         df = model.datacollector.get_model_vars_dataframe()
         n = getattr(getattr(model, "params", None), "n_initial_gangs", 1)
@@ -507,13 +510,43 @@ def Page():
         ax.set_xlabel("Step")
         ax.set_ylabel("Share")
         ax.set_ylim(0, 1)
-        ax.legend(loc="best", fontsize=9)
+        ax.legend(loc="best", fontsize=10)
         solara.FigureMatplotlib(fig, format="png", bbox_inches="tight")
+
+    def make_tail_plot_component(measure, page: int = 0, tail: int = MAX_TAIL_POINTS):
+        @solara.component
+        def Plot(model):
+            is_mobile = use_media_query("(max-width: 640px)")
+            update_counter.get()
+            fig = Figure(figsize=(4.8, 3.4) if is_mobile else (6.4, 4.5))
+            ax = fig.subplots()
+            df = model.datacollector.get_model_vars_dataframe().tail(tail)
+            if isinstance(measure, str):
+                if measure in df.columns:
+                    ax.plot(df.index, df[measure], label=measure)
+                    ax.set_ylabel(measure)
+            elif isinstance(measure, dict):
+                for m, color in measure.items():
+                    if m in df.columns:
+                        ax.plot(df.index, df[m], label=m, color=color)
+                if measure:
+                    ax.legend(loc="best", fontsize=10)
+            elif isinstance(measure, (list, tuple)):
+                for m in measure:
+                    if m in df.columns:
+                        ax.plot(df.index, df[m], label=m)
+                if measure:
+                    ax.legend(loc="best", fontsize=10)
+            ax.set_xlabel("Step")
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            solara.FigureMatplotlib(fig, format="png", bbox_inches="tight")
+
+        return (Plot, page)
 
     components = [
         (space_component, 0),
         (GangSharePlot, 0),
-        make_mpl_plot_component(
+        make_tail_plot_component(
             {
                 "fights_per_tick": "#000000",
                 "joins_per_tick": "#2ca02c",
@@ -522,14 +555,14 @@ def Page():
             },
             page=0,
         ),
-        make_mpl_plot_component(
+        make_tail_plot_component(
             {
                 "avg_fear_overall": "#9467bd",
                 "avg_fear_unaffiliated": "#bcbd22",
             },
             page=0,
         ),
-        make_mpl_plot_component("alive_count", page=0),
+        make_tail_plot_component("alive_count", page=0),
     ]
 
     return SolaraVizSpeed(
