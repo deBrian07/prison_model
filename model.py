@@ -74,7 +74,13 @@ class PrisonModelLevel1(Model):
         self.gangs = {}
         n = max(1, int(self.params.n_initial_gangs))
         for i in range(1, n + 1):
-            self.gangs[i] = Gang(gang_id=i, name=f"Gang {i}")
+            if i == 1:
+                name = "Gang John"
+            elif i == 2:
+                name = "Gang Kevin"
+            else:
+                name = f"Gang {i}"
+            self.gangs[i] = Gang(gang_id=i, name=name)
 
     def _init_agents(self) -> None:
         p = self.params

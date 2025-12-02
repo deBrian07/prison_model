@@ -485,10 +485,11 @@ def Page():
         for gid in range(1, n + 1):
             col = f"pct_gang{gid}"
             if col in df.columns:
+                gang_name = getattr(getattr(model, "gangs", {}).get(gid), "name", f"Gang {gid}")
                 ax.plot(
                     df.index,
                     df[col],
-                    label=col,
+                    label=gang_name,
                     color=GANG_COLORS[(gid - 1) % len(GANG_COLORS)],
                 )
         if "pct_unaffiliated" in df.columns:
